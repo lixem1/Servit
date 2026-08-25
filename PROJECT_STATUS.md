@@ -346,6 +346,7 @@ El plan detallado, paso a paso, vive en `/Users/lixem/.claude/plans/smooth-craft
 4. `docker compose up -d --build`, verificar logs.
 5. Apuntar el mobile a la IP pública de la VM (`--dart-define=API_HOST=<ip>`), verificar end-to-end en un iPhone físico (registro, crear solicitud, confirmar filas en la DB vía `psql`), y confirmar que los contenedores sobreviven un reinicio de la VM.
 
+**Actualización (2026-08-25): el reintento de creación de la VM ya no depende de la Mac del usuario.** Se migró a un workflow de **GitHub Actions** (`.github/workflows/oracle-vm-retry.yml`, repo privado `lixem1/Servit`) que corre cada 15 minutos en la nube. Cada corrida hace un intento de `oci compute instance launch`; si Oracle sigue sin capacidad, no hace nada más (el próximo intento programado se encarga). Si tiene éxito: envía un correo a `pantojakevin@gmail.com` (reusando las credenciales SMTP ya configuradas para recuperación de contraseña) con el instance ID y la IP pública, y se desactiva solo (`gh workflow disable`) para no seguir corriendo innecesariamente. Las credenciales de OCI y SMTP están como GitHub Actions secrets (encriptados, nunca en el código). El script local `~/servit-deploy/retry-create-vm.sh` quedó obsoleto y se detuvo. Para revisar el estado: `gh run list -R lixem1/Servit --workflow=oracle-vm-retry.yml`.
 
 ## 10. Gestión de cuenta — COMPLETADO Y VERIFICADO
 

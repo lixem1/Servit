@@ -17,3 +17,6 @@ mobile/**/*.iml
 
 # macOS
 .DS_Store
+
+# gh CLI local state (created accidentally in repo dir)
+.local/
