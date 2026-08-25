@@ -1,0 +1,91 @@
+name: oracle-vm-retry
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  actions: write
+
+jobs:
+  try-create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install OCI CLI
+        run: pip install oci-cli
+
+      - name: Configure OCI CLI
+        run: |
+          mkdir -p ~/.oci
+          printf '%s' "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+          cat > ~/.oci/config <<EOF
+          [DEFAULT]
+          user=${{ secrets.OCI_USER_OCID }}
+          fingerprint=${{ secrets.OCI_FINGERPRINT }}
+          tenancy=${{ secrets.OCI_TENANCY_OCID }}
+          region=${{ secrets.OCI_REGION }}
+          key_file=~/.oci/oci_api_key.pem
+          EOF
+          printf '%s' "${{ secrets.OCI_SSH_PUBLIC_KEY }}" > /tmp/servit-oracle.key.pub
+
+      - name: Attempt instance launch
+        id: attempt
+        run: |
+          set +e
+          result=$(oci compute instance launch \
+            --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
+            --availability-domain "kwWB:MX-QUERETARO-1-AD-1" \
+            --shape "VM.Standard.A1.Flex" \
+            --shape-config '{"ocpus": 2, "memoryInGBs": 12}' \
+            --display-name "servit-backend" \
+            --image-id "ocid1.image.oc1.mx-queretaro-1.aaaaaaaaemveyi7xmiwngbxqci35v6cfqcbyq2tbicn55cll7dlbu7a6gola" \
+            --subnet-id "ocid1.subnet.oc1.mx-queretaro-1.aaaaaaaapuimh6y2ftqwsqzghdns3mn7inotdnonulsmv6rztfrlek2sy6lq" \
+            --assign-public-ip true \
+            --ssh-authorized-keys-file /tmp/servit-oracle.key.pub \
+            --wait-for-state RUNNING \
+            --max-wait-seconds 90 \
+            2>&1)
+          echo "$result"
+          if echo "$result" | grep -q '"lifecycle-state": "RUNNING"'; then
+            echo "success=true" >> "$GITHUB_OUTPUT"
+            instance_id=$(echo "$result" | grep -m1 '"id"' | sed -E 's/.*"id": *"([^"]+)".*/\1/')
+            echo "instance_id=$instance_id" >> "$GITHUB_OUTPUT"
+          else
+            echo "success=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get public IP
+        if: steps.attempt.outputs.success == 'true'
+        id: getip
+        run: |
+          sleep 15
+          ip=$(oci compute instance list-vnics --instance-id "${{ steps.attempt.outputs.instance_id }}" --query 'data[0]."public-ip"' --raw-output 2>/dev/null)
+          echo "ip=${ip:-desconocida}" >> "$GITHUB_OUTPUT"
+
+      - name: Send success email
+        if: steps.attempt.outputs.success == 'true'
+        uses: dawidd6/action-send-mail@v4
+        with:
+          server_address: ${{ secrets.SMTP_HOST }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          secure: true
+          username: ${{ secrets.SMTP_USER }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          from: Servit Deploy
+          to: pantojakevin@gmail.com
+          subject: "✅ VM de Oracle Cloud lista"
+          body: |
+            La instancia de Oracle Cloud ya está corriendo.
+
+            Instance ID: ${{ steps.attempt.outputs.instance_id }}
+            IP pública: ${{ steps.getip.outputs.ip }}
+
+            Siguiente paso: conectar por SSH y desplegar el backend (ver PROJECT_STATUS.md sección 9).
+
+      - name: Disable this workflow's schedule
+        if: steps.attempt.outputs.success == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow disable "oracle-vm-retry.yml" -R ${{ github.repository }}
