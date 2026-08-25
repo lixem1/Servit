@@ -1,0 +1,19 @@
+# .NET
+backend/**/bin/
+backend/**/obj/
+backend/src/Servit.Api/uploads/
+backend/uploads/
+backend/.env
+*.user
+
+# Flutter / Dart
+mobile/**/.dart_tool/
+mobile/**/build/
+mobile/**/.flutter-plugins
+mobile/**/.flutter-plugins-dependencies
+mobile/**/.packages
+mobile/ios/Pods/
+mobile/**/*.iml
+
+# macOS
+.DS_Store

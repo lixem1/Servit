@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Servit.Api/Servit.Api.csproj" />
+    <Project Path="src/Servit.Domain/Servit.Domain.csproj" />
+    <Project Path="src/Servit.Infrastructure/Servit.Infrastructure.csproj" />
+  </Folder>
+</Solution>
