@@ -2,7 +2,7 @@ name: oracle-vm-retry
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/20 * * * *'
   workflow_dispatch: {}
 
 permissions:
@@ -30,24 +30,39 @@ jobs:
           EOF
           printf '%s' "${{ secrets.OCI_SSH_PUBLIC_KEY }}" > /tmp/servit-oracle.key.pub
 
-      - name: Attempt instance launch
+      - name: Attempt instance launch (with rate-limit retry)
         id: attempt
         run: |
           set +e
-          result=$(oci compute instance launch \
-            --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
-            --availability-domain "kwWB:MX-QUERETARO-1-AD-1" \
-            --shape "VM.Standard.A1.Flex" \
-            --shape-config '{"ocpus": 2, "memoryInGBs": 12}' \
-            --display-name "servit-backend" \
-            --image-id "ocid1.image.oc1.mx-queretaro-1.aaaaaaaaemveyi7xmiwngbxqci35v6cfqcbyq2tbicn55cll7dlbu7a6gola" \
-            --subnet-id "ocid1.subnet.oc1.mx-queretaro-1.aaaaaaaapuimh6y2ftqwsqzghdns3mn7inotdnonulsmv6rztfrlek2sy6lq" \
-            --assign-public-ip true \
-            --ssh-authorized-keys-file /tmp/servit-oracle.key.pub \
-            --wait-for-state RUNNING \
-            --max-wait-seconds 90 \
-            2>&1)
+          
+          attempt_launch() {
+            oci compute instance launch \
+              --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
+              --availability-domain "kwWB:MX-QUERETARO-1-AD-1" \
+              --shape "VM.Standard.A1.Flex" \
+              --shape-config '{"ocpus": 2, "memoryInGBs": 12}' \
+              --display-name "servit-backend" \
+              --image-id "ocid1.image.oc1.mx-queretaro-1.aaaaaaaaemveyi7xmiwngbxqci35v6cfqcbyq2tbicn55cll7dlbu7a6gola" \
+              --subnet-id "ocid1.subnet.oc1.mx-queretaro-1.aaaaaaaapuimh6y2ftqwsqzghdns3mn7inotdnonulsmv6rztfrlek2sy6lq" \
+              --assign-public-ip true \
+              --ssh-authorized-keys-file /tmp/servit-oracle.key.pub \
+              --wait-for-state RUNNING \
+              --max-wait-seconds 90 \
+              2>&1
+          }
+          
+          # First attempt
+          result=$(attempt_launch)
           echo "$result"
+          
+          # If rate-limited, wait 5 minutes and retry once
+          if echo "$result" | grep -qi "TooManyRequests"; then
+            echo "Rate limit detected. Waiting 5 minutes before retry..."
+            sleep 300
+            result=$(attempt_launch)
+            echo "$result"
+          fi
+          
           if echo "$result" | grep -q '"lifecycle-state": "RUNNING"'; then
             echo "success=true" >> "$GITHUB_OUTPUT"
             instance_id=$(echo "$result" | grep -m1 '"id"' | sed -E 's/.*"id": *"([^"]+)".*/\1/')
