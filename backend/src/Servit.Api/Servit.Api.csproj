@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>03adf91e-fb80-4550-8cf2-1f329b631a12</UserSecretsId>
+    <SixLaborsLicenseKey>Community</SixLaborsLicenseKey>
   </PropertyGroup>
 
   <ItemGroup>
