@@ -384,3 +384,83 @@ El usuario notó que el proveedor no tenía forma de ver la calificación que le
 - **Backend**: `ServiceRequestDto` ahora incluye `Rating`/`ReviewComment` (opcionales). `GetAssigned()` hace un solo query extra (`dbContext.Reviews` por los `requestIds` del batch, `ToDictionaryAsync`) y los popula en el DTO vía el parámetro `review` ya existente en `ToDto(...)`.
 - **Mobile**: `ServiceRequest` (domain) agrega `rating`/`reviewComment`. En `my_services_screen.dart`, cada tarjeta de la pestaña **Realizados** muestra las estrellas + el comentario del cliente si ya calificó, o el texto "El cliente todavía no ha calificado este servicio." si no. Se removió la tarjeta "Mis calificaciones" del home (y el import/variable de `providerProfileControllerProvider` que ya no hacía falta ahí).
 - Verificado con `dotnet build` + `flutter analyze` limpios y redeploy release a ambos iPhones.
+
+---
+
+## 13. Deploy a Oracle Cloud (Actualizado 2026-08-27)
+
+**Estado**: ✅ COMPLETADO — Backend corriendo en VM Oracle Always Free con compresión de imágenes.
+
+### 13.1 VM Creada
+- **IP pública**: 159.54.142.12
+- **Shape**: VM.Standard.A1.Flex (2 OCPU, 12GB RAM, Always Free)
+- **Imagen**: Ubuntu 24.04 arm64
+- **Región**: mx-queretaro-1
+
+### 13.2 Código Deployado
+- ✅ Dockerfile (multi-stage: SDK 10 → runtime 10)
+- ✅ docker-compose.yml (API + PostgreSQL 16 + PostGIS)
+- ✅ Auto-migración EF Core al startup (`db.Database.Migrate()`)
+- ✅ Compresión inteligente de imágenes (SkiaSharp, max 1920px, JPEG 75%, ≤2MB final)
+
+### 13.3 Resolución de Problemas Técnicos
+
+#### Problema 1: "Out of host capacity" (resolvido)
+- **Causa**: Ampere A1.Flex sin capacidad en la región (50+ intentos fallidos)
+- **Solución**: Automatización con GitHub Actions workflow `oracle-vm-retry.yml`
+  - Retry cada 12 minutos (más agresivo que el inicial de 15min → 20min → 12min final)
+  - Exponential backoff al detectar rate limit (TooManyRequests)
+  - Email notificación al éxito
+  - Auto-desactiva el workflow una vez que la VM esté RUNNING
+- **Resultado**: VM creada exitosamente en el 2do intento tras varias horas
+
+#### Problema 2: SixLabors.ImageSharp licencia en Docker (resolvido)
+- **Causa**: Validación de licencia de SixLabors falla en Docker pero no localmente
+- **Solución**: Reemplazar con SkiaSharp (Microsoft, sin requisitos de licencia)
+- **Cambios**: 
+  - Remove `SixLabors.ImageSharp` 4.1.1
+  - Add `SkiaSharp` 4.151.1 + `SkiaSharp.NativeAssets.Linux`
+  - Reescribir `FileStorageService.cs` (compresión con SKCanvas + SKImage)
+
+#### Problema 3: PostgreSQL build error ARM64 (resolvido)
+- **Causa**: `postgis/postgis:16-3.4` → "exec format error" en ARM64
+- **Solución**: Dockerfile personalizado basado en `postgres:16` + instalar postgis plugin
+  - `backend/postgres-init/Dockerfile` (2 líneas: base + apt install postgis)
+  - docker-compose.yml ahora construye DB desde `./postgres-init/`
+- **Resultado**: Contenedores ambos `healthy` y `running` tras 20s
+
+### 13.4 Configuración de la VM
+
+Secretos (`~/.oci/config` ya importados en GitHub Actions):
+```
+OCI_USER_OCID=ocid1.user.oc1..aaaaaaaanz3rn5rl677reeyrsgmcfmdgt22wype43cmrkhbsaw7remz6q6qa
+OCI_TENANCY_OCID=ocid1.tenancy.oc1..aaaaaaaagq2jr7uxp7mkeda4iadkkhrpf2j4i2igabmjte2s4zppntg63kua
+OCI_FINGERPRINT=ee:e0:66:82:0a:20:4e:b4:31:3b:7c:fb:23:37:6a:32
+OCI_REGION=mx-queretaro-1
+OCI_PRIVATE_KEY=(PEM privada)
+OCI_SSH_PUBLIC_KEY=(Ed25519 pública para Ampere)
+```
+
+Variables de entorno `.env` (en VM):
+```
+POSTGRES_USER=servit
+POSTGRES_PASSWORD=servit_db_secure_2026
+JWT_KEY=K6dEI/3ySV6iTdB8adNUlC/5Qrj1Z0wiZZFcRKtcNSo2lDlw/4T9j15FVvCkbUqH
+JWT_ISSUER=servit-api
+JWT_AUDIENCE=servit-app
+GOOGLE_IOS_CLIENT_ID=123326191723-vgl4l913p2u3ftu5fdbjnia34mq8k9cb.apps.googleusercontent.com
+Smtp__Host=mail.denetcon.com
+Smtp__Port=465
+Smtp__User=developer@denetcon.com
+Smtp__Password=-% _YVgS+Z+HL
+Smtp__FromEmail=developer@denetcon.com
+Smtp__FromName=Servit
+```
+
+### 13.5 Verificación
+- ✅ Contenedores corriendo: `docker-compose ps` → api + db ambos "Up (healthy)"
+- ✅ Migraciones aplicadas al startup
+- ✅ API escuchando en `http://[::]:8080` dentro del contenedor, expuesto al puerto 5220 en host
+- ✅ Flutter app desplegada a iPhones apuntando a `API_HOST=159.54.142.12:5220`
+
+---
