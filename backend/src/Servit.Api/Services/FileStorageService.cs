@@ -1,6 +1,4 @@
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Processing;
+using SkiaSharp;
 
 namespace Servit.Api.Services;
 
@@ -68,20 +66,48 @@ public class FileStorageService(IConfiguration configuration, IWebHostEnvironmen
 
     private async Task CompressAndSaveImageAsync(Stream sourceStream, string fullPath)
     {
-        using var image = await Image.LoadAsync(sourceStream);
+        sourceStream.Position = 0;
+        using var skBitmap = SKBitmap.Decode(sourceStream);
         
-        // Reduce dimensions if needed
-        if (image.Width > MaxImageWidth)
+        if (skBitmap == null)
         {
-            var ratio = (float)MaxImageWidth / image.Width;
-            var newHeight = (int)(image.Height * ratio);
-            image.Mutate(x => x.Resize(MaxImageWidth, newHeight));
+            sourceStream.Position = 0;
+            await using var fileStream = File.Create(fullPath);
+            await sourceStream.CopyToAsync(fileStream);
+            return;
         }
 
-        // Save as JPEG with quality adjustment
-        var jpegEncoder = new JpegEncoder { Quality = 75 };
-        await using var outputStream = File.Create(fullPath);
-        await image.SaveAsJpegAsync(outputStream, jpegEncoder);
+        // Resize if needed
+        SKBitmap scaledBitmap;
+        if (skBitmap.Width > MaxImageWidth)
+        {
+            int newHeight = (int)(skBitmap.Height * (float)MaxImageWidth / skBitmap.Width);
+            var destInfo = new SKImageInfo(MaxImageWidth, newHeight);
+            scaledBitmap = new SKBitmap(destInfo);
+            
+            using var canvas = new SKCanvas(scaledBitmap);
+            var srcRect = new SKRect(0, 0, skBitmap.Width, skBitmap.Height);
+            var dstRect = new SKRect(0, 0, MaxImageWidth, newHeight);
+            canvas.DrawBitmap(skBitmap, srcRect, dstRect, null);
+        }
+        else
+        {
+            scaledBitmap = skBitmap;
+        }
+
+        try
+        {
+            using var image = SKImage.FromBitmap(scaledBitmap);
+            using var data = image.Encode(SKEncodedImageFormat.Jpeg, 75);
+            
+            await using var outputStream = File.Create(fullPath);
+            await data.AsStream().CopyToAsync(outputStream);
+        }
+        finally
+        {
+            if (scaledBitmap != skBitmap)
+                scaledBitmap?.Dispose();
+        }
     }
 
     public Stream OpenRead(string relativePath)
