@@ -1,0 +1,51 @@
+name: oracle-vm-watchdog
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  actions: write
+
+jobs:
+  check-and-retry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check last oracle-vm-retry run
+        id: check
+        run: |
+          # Get the last run of oracle-vm-retry workflow
+          last_run=$(gh run list -R ${{ github.repository }} --workflow=oracle-vm-retry.yml -L 1 --json startedAt -q 2>/dev/null | jq -r '.[0].startedAt')
+          
+          if [ -z "$last_run" ] || [ "$last_run" = "null" ]; then
+            echo "No previous runs found. Will trigger."
+            echo "should_trigger=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          
+          # Convert to Unix timestamp
+          last_run_ts=$(date -d "$last_run" +%s 2>/dev/null)
+          now_ts=$(date +%s)
+          diff_minutes=$(( (now_ts - last_run_ts) / 60 ))
+          
+          echo "Last oracle-vm-retry run: $diff_minutes minutes ago"
+          
+          # If more than 30 minutes, trigger
+          if [ "$diff_minutes" -gt 30 ]; then
+            echo "⚠️  No run in the last 30 minutes. Triggering oracle-vm-retry..."
+            echo "should_trigger=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "✅ oracle-vm-retry is running normally (last run: $diff_minutes min ago)"
+            echo "should_trigger=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger oracle-vm-retry if needed
+        if: steps.check.outputs.should_trigger == 'true'
+        run: |
+          gh workflow run oracle-vm-retry.yml -R ${{ github.repository }} --ref main
+          echo "✅ Manually triggered oracle-vm-retry.yml"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
