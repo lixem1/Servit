@@ -7,9 +7,8 @@ typedef OnUnauthorized = void Function();
 class ApiClient {
   ApiClient({
     required TokenProvider tokenProvider,
-    OnUnauthorized? onUnauthorized,
-  })  : _onUnauthorized = onUnauthorized,
-        dio = Dio(BaseOptions(baseUrl: _resolveBaseUrl())) {
+    this.onUnauthorized,
+  }) : dio = Dio(BaseOptions(baseUrl: _resolveBaseUrl())) {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -21,7 +20,7 @@ class ApiClient {
         },
         onError: (error, handler) {
           if (error.response?.statusCode == 401) {
-            _onUnauthorized?.call();
+            onUnauthorized?.call();
           }
           handler.next(error);
         },
@@ -30,7 +29,7 @@ class ApiClient {
   }
 
   final Dio dio;
-  final OnUnauthorized? _onUnauthorized;
+  final OnUnauthorized? onUnauthorized;
 
   String get hubBaseUrl => dio.options.baseUrl.replaceFirst(RegExp(r'/api$'), '');
 
