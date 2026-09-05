@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AspNetCoreRateLimit" Version="5.0.0" />
     <PackageReference Include="Google.Apis.Auth" Version="1.76.0" />
     <PackageReference Include="MailKit" Version="4.17.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
@@ -17,6 +18,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="SecurityHeaders" Version="1.0.2" />
     <PackageReference Include="SkiaSharp" Version="4.151.1" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.151.1" />
   </ItemGroup>

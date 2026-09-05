@@ -12,10 +12,7 @@ using Servit.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
 builder.Services.AddDbContext<ServitDbContext>(options =>
@@ -38,6 +35,7 @@ builder.Services.AddSingleton<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IUserIdProvider, HubUserIdProvider>();
+builder.Services.AddMemoryCache();
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key is not configured. Run 'dotnet user-secrets set Jwt:Key <value>'.");
@@ -63,8 +61,6 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
 
-        // SignalR can't set an Authorization header on the WebSocket handshake,
-        // so the client sends the JWT as a query-string parameter instead.
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
@@ -82,6 +78,19 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+// CORS: Restrict to mobile app
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowMobileApp", policy =>
+    {
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .WithExposedHeaders("content-disposition");
+    });
+});
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -90,18 +99,31 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
+// Security: Add security headers
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["X-XSS-Protection"] = "1; mode=block";
+    context.Response.Headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    context.Response.Headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()";
+    context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'";
+    await next();
+});
+
 app.UseHttpsRedirection();
+
+app.UseCors("AllowMobileApp");
 
 app.UseAuthentication();
 
-// JWTs are stateless and last 7 days, so a soft-deleted account's existing
-// token would otherwise keep working until it expires.
+// Invalidate tokens for deleted accounts
 app.Use(async (context, next) =>
 {
     if (context.User.Identity?.IsAuthenticated == true)
@@ -118,6 +140,47 @@ app.Use(async (context, next) =>
             return;
         }
     }
+    await next();
+});
+
+// Rate limiting: Simple in-memory implementation
+var requestCounts = new Dictionary<string, (int count, DateTime resetTime)>();
+app.Use(async (context, next) =>
+{
+    var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    var endpoint = context.Request.Path.ToString().ToLower();
+    var key = $"{clientIp}:{endpoint}";
+    var now = DateTime.UtcNow;
+
+    if (!requestCounts.ContainsKey(key))
+    {
+        requestCounts[key] = (1, now.AddSeconds(60));
+    }
+    else
+    {
+        var (count, resetTime) = requestCounts[key];
+        if (now > resetTime)
+        {
+            requestCounts[key] = (1, now.AddSeconds(60));
+        }
+        else
+        {
+            requestCounts[key] = (count + 1, resetTime);
+        }
+    }
+
+    var (currentCount, _) = requestCounts[key];
+    var limit = endpoint.Contains("/auth/login") ? 10 :
+                endpoint.Contains("/auth/register") ? 5 :
+                endpoint.Contains("/auth/forgot-password") ? 3 : 100;
+
+    if (currentCount > limit)
+    {
+        context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.Response.Headers["Retry-After"] = "60";
+        return;
+    }
+
     await next();
 });
 
