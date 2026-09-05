@@ -2,10 +2,14 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 typedef TokenProvider = Future<String?> Function();
+typedef OnUnauthorized = void Function();
 
 class ApiClient {
-  ApiClient({required TokenProvider tokenProvider})
-      : dio = Dio(BaseOptions(baseUrl: _resolveBaseUrl())) {
+  ApiClient({
+    required TokenProvider tokenProvider,
+    OnUnauthorized? onUnauthorized,
+  })  : _onUnauthorized = onUnauthorized,
+        dio = Dio(BaseOptions(baseUrl: _resolveBaseUrl())) {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -15,23 +19,27 @@ class ApiClient {
           }
           handler.next(options);
         },
+        onError: (error, handler) {
+          if (error.response?.statusCode == 401) {
+            _onUnauthorized?.call();
+          }
+          handler.next(error);
+        },
       ),
     );
   }
 
   final Dio dio;
+  final OnUnauthorized? _onUnauthorized;
 
   String get hubBaseUrl => dio.options.baseUrl.replaceFirst(RegExp(r'/api$'), '');
 
-  // Override with --dart-define=API_HOST=<lan-ip> when running on a physical
-  // device, since it can't reach the dev machine via localhost/10.0.2.2.
   static String _resolveBaseUrl() {
     const overrideHost = String.fromEnvironment('API_HOST');
     if (overrideHost.isNotEmpty) {
       return 'http://$overrideHost:5220/api';
     }
 
-    // Android emulator can't reach the host via localhost; it maps to 10.0.2.2.
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:5220/api';
     }

@@ -21,16 +21,21 @@ final authTokenProviderProvider = Provider<TokenProvider>((ref) {
   };
 });
 
+final authControllerProvider =
+    AsyncNotifierProvider<AuthController, AuthSession?>(AuthController.new);
+
 final apiClientProvider = Provider((ref) {
-  return ApiClient(tokenProvider: ref.read(authTokenProviderProvider));
+  return ApiClient(
+    tokenProvider: ref.read(authTokenProviderProvider),
+    onUnauthorized: () {
+      ref.read(authControllerProvider.notifier).logout();
+    },
+  );
 });
 
 final authRepositoryProvider = Provider((ref) {
   return AuthRepository(ref.read(apiClientProvider).dio);
 });
-
-final authControllerProvider =
-    AsyncNotifierProvider<AuthController, AuthSession?>(AuthController.new);
 
 class AuthController extends AsyncNotifier<AuthSession?> {
   @override
