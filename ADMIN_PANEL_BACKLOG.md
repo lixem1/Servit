@@ -1,168 +1,179 @@
 # Servit — Backlog: Panel Administrativo Web
 
-> Documento de planificación para el panel admin. Generado el 2026-09-10.
-> Decisiones tomadas: **Frontend = React-Admin (SPA)** · **HTTPS/acceso = Cloudflare Tunnel** ·
-> **Precios = editar cotizaciones individuales** (`ProviderResponse.ProposedPrice`; sin comisión de plataforma ni precio por categoría).
-> Infra: VM Oracle Ampere A1 (2 vCPU, 11 GB RAM, ~26 GB disco libre) — capacidad de sobra.
+> Planificación del panel admin. Generado 2026-09-10 (rev. 2).
+> **Decisiones:** Frontend = **React-Admin (SPA)** · HTTPS/acceso = **Cloudflare Tunnel** ·
+> **Precios = NO edición libre de cotizaciones** (ver Fase 4: ajuste con motivo, solo disputas) ·
+> **Verificación de proveedores = DIFERIDA** (pendiente de investigar cómo lo hacen otras plataformas).
+> Infra: VM Oracle Ampere A1 (2 vCPU, 11 GB RAM, ~26 GB libre) — capacidad de sobra.
 
-## Convenciones (aplican a todas las tareas)
-- Endpoints admin bajo `/api/admin/...`, todos con `[Authorize(Roles = "Admin")]`.
-- Paginación, filtros y ordenamiento estándar en todos los listados (query params: `page`, `pageSize`, `sort`, filtros por campo).
-- Toda mutación admin (borrar, cambiar estado, editar precio, cambiar rol, verificar) queda **auditada** (AP-03).
-- DTOs dedicados en `Contracts/Admin`; nunca exponer entidades EF directas.
-- CORS del API restringido al origen del panel (host de Cloudflare), no `AllowAnyOrigin`.
+## Convenciones (todas las tareas)
+- Endpoints admin bajo `/api/admin/...` con `[Authorize(Roles = "Admin")]`.
+- Paginación, filtros y orden estándar en listados (formato compatible con el dataProvider de React-Admin).
+- Toda mutación admin queda **auditada** (AP-03).
+- DTOs en `Contracts/Admin`; nunca exponer entidades EF directas.
+- CORS del API restringido al origen del panel (host de Cloudflare).
+
+## Guía de diseño — qué es editable y qué no
+- **Editable ✅:** categorías; estado de solicitudes (cancelar/marcar resuelta); estado de cuenta (suspender/restaurar/rol); moderación (eliminar reseñas abusivas); corrección puntual de datos de perfil por soporte (auditada).
+- **NO editable ❌:** precio negociado de una cotización (usar anulación o, en disputa, "ajuste con motivo" auditado — Fase 4); contenido de reseñas de terceros (solo eliminar); historial/timestamps.
+- **Principio:** el admin edita catálogo/config, estado de cuenta y estado operativo, y **modera** contenido; no reescribe registros comerciales/transaccionales de terceros.
 
 ---
 
-## Fase 0 — Fundaciones de seguridad (backend)
-_Bloqueante del resto. Sin esto no hay admin._
+## Fase 0 — Fundaciones de seguridad (backend) · bloqueante
 
 ### AP-01 · Rol Admin + seed del primer administrador
 - **Área:** backend
-- **Descripción:** Agregar `Admin` a `Roles.cs`. Sembrar (seed) en el arranque un usuario admin inicial tomando credenciales de configuración (`Admin:Email`, `Admin:Password` vía user-secrets/.env), creando el rol si no existe. Idempotente.
-- **Aceptación:** al levantar el API con las vars, existe un usuario con rol `Admin`; login estándar devuelve el rol `Admin` en el token. No se crea nada si ya existe.
+- Agregar `Admin` a `Roles.cs`. Sembrar un admin inicial desde config (`Admin:Email`, `Admin:Password`), creando el rol si falta. Idempotente.
+- **Aceptación:** existe un usuario `Admin`; login estándar devuelve el rol; no duplica si ya existe.
 
-### AP-02 · Autorización Admin y guardas
+### AP-02 · Autorización Admin + sesión
 - **Área:** backend
-- **Descripción:** Política/atributo `[Authorize(Roles="Admin")]` reutilizable. Asegurar que los endpoints existentes (Categories write, etc.) que pasen a admin queden protegidos. Endpoint `GET /api/admin/me` para que el panel valide sesión+rol.
-- **Aceptación:** un token no-Admin recibe 403 en cualquier `/api/admin/*`; `GET /api/admin/me` devuelve datos del admin autenticado.
+- Política `[Authorize(Roles="Admin")]` reutilizable; proteger endpoints admin. `GET /api/admin/me` para validar sesión+rol desde el panel.
+- **Aceptación:** no-Admin recibe 403 en `/api/admin/*`; `/admin/me` devuelve el admin autenticado.
 
 ### AP-03 · Log de auditoría
 - **Área:** backend
-- **Descripción:** Entidad `AdminAuditLog` (id, adminUserId, action, entityType, entityId, metadata json, createdAt) + migración + servicio para registrar acciones. Escribir un registro en cada mutación admin.
-- **Aceptación:** cada acción admin (AP-06..AP-12) genera una fila de auditoría consultable.
-
-### AP-04 · Campo de verificación en Provider
-- **Área:** backend
-- **Descripción:** Agregar `IsVerified` (bool, default false) y `VerifiedAt` (nullable) a `Provider` + migración.
-- **Aceptación:** migración aplica sin romper datos; campos disponibles vía API.
+- Entidad `AdminAuditLog` (adminUserId, action, entityType, entityId, metadata json, valorAnterior/Nuevo cuando aplique, createdAt) + migración + servicio. Registrar en cada mutación admin.
+- **Aceptación:** cada acción admin genera una fila consultable.
 
 ---
 
 ## Fase 1 — API de administración (backend)
-_Cada tarea = un grupo de endpoints bajo `/api/admin`._
 
-### AP-05 · Base: paginación, filtros y manejo de errores admin
+### AP-04 · Base: paginación/filtros/orden + errores
 - **Área:** backend
-- **Descripción:** Helpers de paginado/orden/filtrado y formato de respuesta (`{ data, total }`) que React-Admin espera (headers `Content-Range` o payload equivalente). Manejo de errores consistente.
-- **Aceptación:** un listado de prueba responde en el formato que consume el dataProvider de React-Admin.
+- Helpers de paginado/orden/filtrado y formato `{ data, total }` (o `Content-Range`) que React-Admin consume.
+- **Aceptación:** un listado responde en el formato del dataProvider.
 
-### AP-06 · Usuarios
+### AP-05 · Usuarios (+ perfil 360)
 - **Área:** backend
-- **Descripción:** `GET /admin/users` (buscar por nombre/email, filtrar por rol/estado/fecha), `GET /admin/users/{id}`, `POST /admin/users/{id}/suspend` y `/restore` (usa `DeletedAt`), `POST /admin/users/{id}/role`, `POST /admin/users/{id}/force-reset`.
-- **Aceptación:** se puede listar, ver, suspender/restaurar, cambiar rol y forzar reset; todo auditado.
+- `GET /admin/users` (buscar por nombre/email; filtrar rol/estado/fecha), `GET /admin/users/{id}` con **vista 360** (sus solicitudes, reseñas dadas/recibidas, actividad), `POST .../suspend|restore` (usa `DeletedAt`), `POST .../role`, `POST .../force-reset`.
+- **Aceptación:** listar/buscar, ver 360, suspender/restaurar, cambiar rol, forzar reset; auditado.
 
-### AP-07 · Proveedores
+### AP-06 · Proveedores (+ perfil 360) · sin verificación (diferida)
 - **Área:** backend
-- **Descripción:** `GET /admin/providers` (con rating, #categorías, verificado), `GET /admin/providers/{id}`, `POST /admin/providers/{id}/verify` y `/unverify` (setea AP-04).
-- **Aceptación:** listado/detalle de proveedores + alternar verificación (auditado).
+- `GET /admin/providers` (rating, #categorías, #trabajos), `GET /admin/providers/{id}` con **360**: trabajos realizados, **tasa de aceptación**, **tiempo medio de respuesta**, rating, **GMV generado**. (La verificación se agrega cuando se retome — ver "Diferido".)
+- **Aceptación:** listado + detalle 360 de proveedores.
 
-### AP-08 · Categorías (CRUD)
+### AP-07 · Categorías (CRUD)
 - **Área:** backend
-- **Descripción:** Extender Categories con `POST/PUT/DELETE` admin-guarded. Impedir borrar categoría con proveedores/solicitudes asociadas (o soft-guard con mensaje claro).
-- **Aceptación:** CRUD completo de categorías desde admin; borrado seguro.
+- `POST/PUT/DELETE` admin-guarded en Categories. Borrado seguro si hay asociaciones (bloquear con mensaje claro).
+- **Aceptación:** CRUD completo con borrado seguro.
 
-### AP-09 · Solicitudes de servicio
+### AP-08 · Solicitudes + Historial/Búsqueda (núcleo operativo)
 - **Área:** backend
-- **Descripción:** `GET /admin/service-requests` (filtrar por estado/categoría/fecha/cliente), `GET /admin/service-requests/{id}` (incluye adjuntos + respuestas), `PATCH .../status`, `POST .../cancel`, `DELETE .../{id}`.
-- **Aceptación:** listar/filtrar, ver detalle con adjuntos y cotizaciones, cambiar estado, cancelar y eliminar; auditado.
+- `GET /admin/service-requests` con **búsqueda global** y filtros (estado, categoría, rango de fechas, cliente, proveedor), y segmentos: **en cola** (Pending), **en curso** (Assigned), **realizadas** (Completed), **canceladas** (Cancelled). `GET /admin/service-requests/{id}` = **timeline completo** (creación → cotizaciones → asignación → cierre) + adjuntos + cotizaciones (solo lectura). `PATCH .../status`, `POST .../cancel`, `DELETE .../{id}`.
+- **Aceptación:** buscar/filtrar todo el historial, ver detalle con timeline y adjuntos, cambiar estado/cancelar/eliminar; auditado.
 
-### AP-10 · Cotizaciones / precios
+### AP-09 · Reseñas (moderación)
 - **Área:** backend
-- **Descripción:** `GET /admin/service-requests/{id}/responses`, `PATCH /admin/responses/{id}` para editar `ProposedPrice` (y opcionalmente `Status`). Validación de monto ≥ 0.
-- **Aceptación:** el admin puede ver y **editar el precio de una cotización** puntual; queda auditado con valor anterior/nuevo.
+- `GET /admin/reviews` (filtrar proveedor/rating/fecha), `DELETE /admin/reviews/{id}` con recálculo de `AverageRating`/`RatingCount`.
+- **Aceptación:** listar y eliminar reseñas; rating recalculado.
 
-### AP-11 · Reseñas (moderación)
+### AP-10 · Reportes / KPIs
 - **Área:** backend
-- **Descripción:** `GET /admin/reviews` (filtrar por proveedor/rating/fecha), `DELETE /admin/reviews/{id}`. Al borrar, recalcular `AverageRating`/`RatingCount` del proveedor.
-- **Aceptación:** se listan y eliminan reseñas; el rating del proveedor se recalcula correctamente.
+- `GET /admin/reports/summary` (usuarios totales/nuevos, proveedores, solicitudes por estado, tasa de completado, GMV = Σ `ProposedPrice` de completadas), `GET /admin/reports/timeseries`, `GET /admin/reports/top?dimension=providers|categories`, `GET /admin/reports/export.csv`.
+- **Aceptación:** KPIs, series temporales, tops y CSV descargable.
 
-### AP-12 · Reportes / analítica
+### AP-11 · Analítica operativa (embudo · SLA · stale)
 - **Área:** backend
-- **Descripción:** `GET /admin/reports/summary` (KPIs: usuarios totales/nuevos, proveedores, solicitudes por estado, tasa de completado, GMV = Σ `ProposedPrice` de solicitudes completadas), `GET /admin/reports/timeseries?metric=...&from=...&to=...`, `GET /admin/reports/top?dimension=providers|categories`, y export `GET /admin/reports/export.csv`.
-- **Aceptación:** endpoints devuelven KPIs, series temporales, tops y CSV descargable.
+- **Embudo:** solicitudes → cotizaciones → asignadas → completadas (con caída por etapa). **SLA/tiempos:** tiempo medio de 1ª respuesta y tiempo en cola. **Stale:** solicitudes Pending con 0 cotizaciones tras X horas.
+- **Aceptación:** endpoints devuelven embudo, métricas de tiempo y lista de solicitudes sin respuesta.
+
+### AP-12 · Vista geográfica (PostGIS)
+- **Área:** backend
+- `GET /admin/geo/requests` y `/admin/geo/providers` devolviendo lat/lon (desde los `Point` SRID 4326) con filtros por estado/categoría/fecha, para alimentar un mapa/heatmap de demanda.
+- **Aceptación:** endpoints devuelven puntos geográficos filtrables.
 
 ---
 
-## Fase 2 — Panel React-Admin (frontend, carpeta `admin/`)
+## Fase 2 — Panel React-Admin (carpeta `admin/`)
 
-### AP-13 · Scaffold del panel
+### AP-13 · Scaffold + auth
 - **Área:** frontend
-- **Descripción:** App React-Admin con Vite + TypeScript en `admin/`. `dataProvider` REST apuntando a `/api/admin`, `authProvider` con login vía `/api/auth/login` que **rechaza si el rol ≠ Admin**. Menú en español, tema básico de marca.
-- **Aceptación:** `npm run build` genera estáticos; login admin funciona; no-admin es rechazado.
+- React-Admin (Vite + TS) en `admin/`. `dataProvider` a `/api/admin`; `authProvider` con login vía `/api/auth/login` que **rechaza si rol ≠ Admin**. Menú y textos en español, tema de marca.
+- **Aceptación:** build genera estáticos; login admin ok; no-admin rechazado.
 
-### AP-14 · Recurso Usuarios
-- **Área:** frontend
-- **Descripción:** List (filtros por rol/estado/búsqueda), Show, Edit; acciones suspender/restaurar, cambiar rol, forzar reset.
-- **Aceptación:** operaciones de AP-06 disponibles desde la UI.
+### AP-14 · Usuarios (+ perfil 360)
+- **Área:** frontend — List/Show/Edit con filtros; acciones suspender/restaurar/rol/reset; pestaña 360.
+- **Aceptación:** AP-05 disponible en UI, con vista 360.
 
-### AP-15 · Recurso Proveedores
-- **Área:** frontend
-- **Descripción:** List/Show con rating y categorías; toggle Verificar/Quitar verificación.
-- **Aceptación:** operaciones de AP-07 desde la UI.
+### AP-15 · Proveedores (+ perfil 360)
+- **Área:** frontend — List/Show con rating, categorías, métricas 360 (trabajos, aceptación, tiempo de respuesta, GMV).
+- **Aceptación:** AP-06 en UI.
 
-### AP-16 · Recurso Categorías (CRUD)
-- **Área:** frontend
-- **Descripción:** List/Create/Edit/Delete de categorías.
-- **Aceptación:** CRUD de AP-08 desde la UI, con mensajes de borrado seguro.
+### AP-16 · Categorías (CRUD)
+- **Área:** frontend — List/Create/Edit/Delete con borrado seguro.
+- **Aceptación:** AP-07 en UI.
 
-### AP-17 · Recurso Solicitudes
+### AP-17 · Tablero de Historial/Operaciones (solicitudes)
 - **Área:** frontend
-- **Descripción:** List con filtros por estado/categoría/fecha; Show con visor de adjuntos (foto/video/audio), lista de cotizaciones, y acciones cambiar estado/cancelar/eliminar.
-- **Aceptación:** operaciones de AP-09 desde la UI, con visor de adjuntos.
+- List con **búsqueda** y filtros; **segmentos**: en cola / en curso / realizadas / canceladas (tabs o filtros guardados). Show con **timeline**, visor de adjuntos (foto/video/audio), cotizaciones (solo lectura) y acciones estado/cancelar/eliminar.
+- **Aceptación:** AP-08 en UI, con segmentos y timeline.
 
-### AP-18 · Edición de cotizaciones (precios)
-- **Área:** frontend
-- **Descripción:** Dentro del detalle de solicitud, editar `ProposedPrice` de una cotización (AP-10).
-- **Aceptación:** el admin edita un precio y ve el cambio reflejado.
+### AP-18 · Reseñas (moderación)
+- **Área:** frontend — List con filtros + eliminar.
+- **Aceptación:** AP-09 en UI.
 
-### AP-19 · Recurso Reseñas
-- **Área:** frontend
-- **Descripción:** List con filtros; acción eliminar reseña.
-- **Aceptación:** moderación de AP-11 desde la UI.
+### AP-19 · Dashboard de KPIs
+- **Área:** frontend — tarjetas KPI + gráficos (recharts) + export CSV.
+- **Aceptación:** AP-10 en UI.
 
-### AP-20 · Dashboard de reportes
-- **Área:** frontend
-- **Descripción:** Página inicial con tarjetas de KPIs, gráficos (recharts) de series temporales y tops, y botones de export CSV (AP-12).
-- **Aceptación:** dashboard carga KPIs y gráficos reales del backend; export descarga CSV.
+### AP-20 · Analítica operativa (UI)
+- **Área:** frontend — embudo, SLA/tiempos y lista de solicitudes stale (AP-11).
+- **Aceptación:** vistas cargan datos reales.
+
+### AP-21 · Mapa de demanda
+- **Área:** frontend — mapa (react-leaflet u similar) con marcadores/heatmap desde AP-12; filtros por estado/categoría/fecha.
+- **Aceptación:** mapa muestra solicitudes/proveedores filtrables.
+
+### AP-22 · Visor de log de auditoría
+- **Área:** frontend — List/Show del `AdminAuditLog` (AP-03): quién, qué, cuándo, valor anterior/nuevo.
+- **Aceptación:** se puede rastrear cualquier acción admin.
+
+### AP-23 · Pruebas E2E del panel (Playwright)
+- **Área:** frontend/QA
+- `@playwright/test` en `admin/` con flujos críticos: login admin (+ rechazo de no-admin), buscar/filtrar recursos, detalle de solicitud, cambio de estado, moderar reseña, dashboard. Screenshots/traces en fallo.
+- **Aceptación:** `npx playwright test` corre en headless y cubre los flujos críticos.
 
 ---
 
-## Fase 3 — Deploy en la VM Oracle (nginx + Cloudflare Tunnel)
-_Ejecuta el **agente release**, siempre con tu aprobación explícita._
+## Fase 3 — Deploy en la VM Oracle · lo ejecuta el agente **release** (con tu aprobación)
 
-### AP-21 · Build + contenedor nginx del panel
-- **Área:** devops
-- **Descripción:** Dockerfile multi-stage que compila el SPA de `admin/` y lo sirve con nginx; nginx hace `proxy_pass /api` al contenedor `api`. Añadir servicio `admin` al `docker-compose.yml`.
-- **Aceptación:** `docker-compose up` sirve el panel y el `/api` responde a través de nginx.
+### AP-24 · Build + contenedor nginx del panel
+- **Área:** devops — Dockerfile multi-stage que compila `admin/` y lo sirve con nginx; `proxy_pass /api` al contenedor `api`. Añadir servicio `admin` al compose.
+- **Aceptación:** `docker-compose up` sirve panel y `/api` vía nginx.
 
-### AP-22 · Cloudflare Tunnel (HTTPS)
-- **Área:** devops
-- **Descripción:** Contenedor `cloudflared` con token, mapeando un hostname (dominio en Cloudflare) → nginx. DNS configurado. Documentar creación del túnel y secreto en `.env`.
-- **Aceptación:** el panel es accesible por `https://<host>` con certificado válido; la IP de la VM no se expone directamente.
+### AP-25 · Cloudflare Tunnel (HTTPS)
+- **Área:** devops — contenedor `cloudflared` con token, hostname (dominio Cloudflare) → nginx; DNS; documentar secreto en `.env`.
+- **Aceptación:** panel accesible por `https://<host>` con certificado válido; IP de la VM no expuesta.
 
-### AP-23 · Endurecer CORS + secretos
-- **Área:** backend/devops
-- **Descripción:** Restringir CORS del API al origin del panel. Mover credenciales admin y token de Cloudflare a `.env`/user-secrets. (Opcional recomendado) poner **Cloudflare Access** delante del panel como 2ª capa de login.
-- **Aceptación:** CORS solo permite el host del panel; secretos fuera de git; (si se elige) Access exige identidad antes de llegar al panel.
+### AP-26 · Endurecer CORS + secretos
+- **Área:** backend/devops — CORS solo al origin del panel; credenciales admin y token Cloudflare en `.env`/user-secrets. (Opcional recomendado) **Cloudflare Access** delante del panel como 2ª capa.
+- **Aceptación:** CORS restringido; secretos fuera de git; (si se elige) Access exige identidad.
 
-### AP-24 · Runbook + PROJECT_STATUS
-- **Área:** devops/docs
-- **Descripción:** Documentar pasos de deploy/rollback del panel y actualizar `PROJECT_STATUS.md`.
-- **Aceptación:** runbook reproducible; PROJECT_STATUS refleja el nuevo componente.
+### AP-27 · Runbook + PROJECT_STATUS
+- **Área:** devops/docs — pasos de deploy/rollback + actualizar PROJECT_STATUS.
+- **Aceptación:** runbook reproducible; PROJECT_STATUS al día.
 
 ---
 
-## Fase 4 — Endurecimiento (opcional, post-MVP)
-- **AP-25 · 2FA para admin** + expiración de sesión.
-- **AP-26 · Tests de integración** de los endpoints `/api/admin` (backend).
-- **AP-27 · E2E del panel con Playwright** (nota: el agente QA hoy usa simulador iOS/Flutter; para web hay que habilitarle Playwright — ver nota abajo).
-- **AP-28 · Notificaciones/emails masivos** desde el panel (reutiliza `IEmailSender`/SignalR).
+## Diferido — pendiente de investigación
+### Verificación de proveedores (KYC)
+Antes de diseñar, **investigar cómo lo hacen InDrive/Uber/otras**: qué documentos piden (ID, antecedentes, selfie, certificaciones), el flujo (subida → cola de revisión → aprobado/rechazado → notificación), quién revisa y qué estados existen. Implica: campo(s) de verificación en `Provider` (`IsVerified`, `VerifiedAt`, estado), subida/almacenamiento de documentos, cola de revisión en el panel, y notificación al proveedor. **Retomar cuando esté la investigación.**
+
+## Fase 4 — Opcional / post-MVP
+- **Ajuste de precio con motivo** (auditado, solo disputas) — reemplaza la edición libre descartada.
+- 2FA admin + expiración de sesión.
+- Tests de integración de `/api/admin` (backend).
+- Notificaciones/emails masivos desde el panel (reutiliza `IEmailSender`/SignalR).
+- Tablero en tiempo real (SignalR): solicitudes activas, proveedores en línea, cotizaciones pendientes.
 
 ---
 
 ## Cómo pasarlo a los agentes
-- Ejecutar el workflow **`servit-dev-qa-loop`** por **fase** (el workflow topa en 8 tareas por corrida): primero Fase 0, luego Fase 1, etc. Ejemplo de objetivo: _"Implementar la Fase 0 del ADMIN_PANEL_BACKLOG.md (AP-01..AP-04)"_.
-- **QA del panel web:** el agente QA está configurado para simulador iOS (Flutter). Para probar el panel React hay que ampliarlo a **Playwright** (browser E2E). Hasta entonces, QA del panel = build + checks + revisión manual.
-- **Deploy (Fase 3):** lo hace el agente **release** únicamente con tu aprobación; nunca dentro del loop.
-- **Orden recomendado:** Fase 0 → Fase 1 → Fase 2 → (aprobación) Fase 3.
+- Ejecutar **`servit-dev-qa-loop`** por **fase** (tope 8 tareas/corrida). Ej.: _"Implementar la Fase 0 del ADMIN_PANEL_BACKLOG.md (AP-01..AP-03)"_.
+- El agente **QA** ya prueba **mobile (simulador iOS)** y **web (Playwright)**.
+- **Deploy (Fase 3):** agente **release**, solo con tu aprobación explícita; nunca dentro del loop.
+- **Orden:** Fase 0 → Fase 1 → Fase 2 → (aprobación) Fase 3. Verificación de proveedores: cuando termine la investigación.
