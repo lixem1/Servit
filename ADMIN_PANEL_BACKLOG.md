@@ -2,7 +2,7 @@
 
 > Planificación del panel admin. Generado 2026-09-10 (rev. 2).
 > **Decisiones:** Frontend = **React-Admin (SPA)** · HTTPS/acceso = **Cloudflare Tunnel** ·
-> **Precios = NO edición libre de cotizaciones** (ver Fase 4: ajuste con motivo, solo disputas) ·
+> **Precios = edición de cotizaciones DESCARTADA** (los precios negociados no se editan desde el panel) ·
 > **Verificación de proveedores = DIFERIDA** (pendiente de investigar cómo lo hacen otras plataformas).
 > Infra: VM Oracle Ampere A1 (2 vCPU, 11 GB RAM, ~26 GB libre) — capacidad de sobra.
 
@@ -15,7 +15,7 @@
 
 ## Guía de diseño — qué es editable y qué no
 - **Editable ✅:** categorías; estado de solicitudes (cancelar/marcar resuelta); estado de cuenta (suspender/restaurar/rol); moderación (eliminar reseñas abusivas); corrección puntual de datos de perfil por soporte (auditada).
-- **NO editable ❌:** precio negociado de una cotización (usar anulación o, en disputa, "ajuste con motivo" auditado — Fase 4); contenido de reseñas de terceros (solo eliminar); historial/timestamps.
+- **NO editable ❌:** precio negociado de una cotización (si hay que corregir, anular/cancelar la solicitud); contenido de reseñas de terceros (solo eliminar); historial/timestamps.
 - **Principio:** el admin edita catálogo/config, estado de cuenta y estado operativo, y **modera** contenido; no reescribe registros comerciales/transaccionales de terceros.
 
 ---
@@ -164,7 +164,6 @@
 Antes de diseñar, **investigar cómo lo hacen InDrive/Uber/otras**: qué documentos piden (ID, antecedentes, selfie, certificaciones), el flujo (subida → cola de revisión → aprobado/rechazado → notificación), quién revisa y qué estados existen. Implica: campo(s) de verificación en `Provider` (`IsVerified`, `VerifiedAt`, estado), subida/almacenamiento de documentos, cola de revisión en el panel, y notificación al proveedor. **Retomar cuando esté la investigación.**
 
 ## Fase 4 — Opcional / post-MVP
-- **Ajuste de precio con motivo** (auditado, solo disputas) — reemplaza la edición libre descartada.
 - 2FA admin + expiración de sesión.
 - Tests de integración de `/api/admin` (backend).
 - Notificaciones/emails masivos desde el panel (reutiliza `IEmailSender`/SignalR).
