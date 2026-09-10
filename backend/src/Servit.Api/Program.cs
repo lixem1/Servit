@@ -1,8 +1,10 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using Servit.Api.Extensions;
 using Servit.Api.Hubs;
@@ -78,7 +80,7 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
-// CORS: Restrict to mobile app
+// CORS: open policy — mobile clients don't enforce CORS. Tighten origins if a web client is added.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowMobileApp", policy =>
@@ -143,33 +145,23 @@ app.Use(async (context, next) =>
     await next();
 });
 
-// Rate limiting: Simple in-memory implementation
-var requestCounts = new Dictionary<string, (int count, DateTime resetTime)>();
+// Rate limiting: fixed 60s window per (IP, endpoint), backed by IMemoryCache.
+// IMemoryCache is thread-safe and evicts entries automatically after the window,
+// so counters can't race or leak like a plain Dictionary would.
 app.Use(async (context, next) =>
 {
+    var cache = context.RequestServices.GetRequiredService<IMemoryCache>();
     var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-    var endpoint = context.Request.Path.ToString().ToLower();
-    var key = $"{clientIp}:{endpoint}";
-    var now = DateTime.UtcNow;
+    var endpoint = context.Request.Path.ToString().ToLowerInvariant();
+    var key = $"rl:{clientIp}:{endpoint}";
 
-    if (!requestCounts.ContainsKey(key))
+    var counter = cache.GetOrCreate(key, entry =>
     {
-        requestCounts[key] = (1, now.AddSeconds(60));
-    }
-    else
-    {
-        var (count, resetTime) = requestCounts[key];
-        if (now > resetTime)
-        {
-            requestCounts[key] = (1, now.AddSeconds(60));
-        }
-        else
-        {
-            requestCounts[key] = (count + 1, resetTime);
-        }
-    }
+        entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60);
+        return new StrongBox<int>(0);
+    })!;
+    var currentCount = Interlocked.Increment(ref counter.Value);
 
-    var (currentCount, _) = requestCounts[key];
     var limit = endpoint.Contains("/auth/login") ? 10 :
                 endpoint.Contains("/auth/register") ? 5 :
                 endpoint.Contains("/auth/forgot-password") ? 3 : 100;

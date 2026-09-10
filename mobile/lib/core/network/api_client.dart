@@ -34,14 +34,15 @@ class ApiClient {
   String get hubBaseUrl => dio.options.baseUrl.replaceFirst(RegExp(r'/api$'), '');
 
   static String _resolveBaseUrl() {
+    const overridePort = String.fromEnvironment('API_PORT', defaultValue: '5220');
     const overrideHost = String.fromEnvironment('API_HOST');
     if (overrideHost.isNotEmpty) {
-      return 'http://$overrideHost:5220/api';
+      return 'http://$overrideHost:$overridePort/api';
     }
 
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:5220/api';
+      return 'http://10.0.2.2:$overridePort/api';
     }
-    return 'http://localhost:5220/api';
+    return 'http://localhost:$overridePort/api';
   }
 }

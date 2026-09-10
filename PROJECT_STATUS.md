@@ -1,6 +1,6 @@
 # Servit — Estado del proyecto
 
-> Refleja el estado real al **2026-09-06**: Proyecto completo y funcional en producción (Oracle Cloud Always Free). Backend deployado, iOS funcionando, APK Android compilado. Seguridad implementada (rate limiting, security headers, auto-logout). Listo para distribución.
+> Refleja el estado real al **2026-09-10**: Proyecto completo y funcional en producción (Oracle Cloud Always Free). Backend deployado, iOS funcionando, Android en emulador. Google Sign-In habilitado en Android. Rate limiter endurecido (IMemoryCache). Listo para distribución.
 
 ## 1. Qué es Servit
 
@@ -85,6 +85,34 @@ App tipo Uber/InDrive para contratar servicios del hogar (gasfitería, carpinter
 
 ## 5. Bug Fixes Recientes (2026-09-06)
 
+### ✅ Google Sign-In en Android (2026-09-10)
+**Problema:** "Ocurrió un error inesperado" al pulsar "Continuar con Google" en Android.
+**Causa raíz (dos partes):**
+1. `google_sign_in` v7.2.0 requiere la API nueva (`GoogleSignIn.instance` + `initialize()` + `authenticate()`), y faltaba pasar el `serverClientId`.
+2. El backend solo aceptaba como audiencia el **iOS Client ID**. En Android el idToken lleva audiencia = **Web/Server Client ID**, así que se rechazaba.
+**Solución:**
+- Mobile: `auth_controller.dart` usa `initialize(serverClientId: <web client id>)` + `authenticate()` (API v7).
+- Backend: `AuthController.Google` ahora acepta una lista de audiencias: `GoogleAuth:IosClientId` **y** `GoogleAuth:AndroidClientId`.
+- **Android Web Client ID:** `123326191723-a813r1bf79aphngt6p37j93h6b6isj10.apps.googleusercontent.com`
+  - Package: `com.servit.servit_app` · SHA-1 debug: `94:FD:EE:A1:5E:12:F2:36:D9:D5:2A:E7:8C:A1:D0:53:29:1C:D1:72`
+
+⚠️ **Paso de deploy pendiente:** setear el client ID en la VM:
+```bash
+# En la VM (dentro del contenedor/entorno del API):
+dotnet user-secrets set "GoogleAuth:AndroidClientId" "123326191723-a813r1bf79aphngt6p37j93h6b6isj10.apps.googleusercontent.com"
+# o agregar GoogleAuth__AndroidClientId al .env / docker-compose y reiniciar
+```
+
+### ✅ Rate limiter endurecido (2026-09-10)
+**Problema:** usaba un `Dictionary` no thread-safe mutado desde middleware concurrente → race conditions y memory leak (crecía sin límite).
+**Solución:** reescrito con `IMemoryCache` (ya registrado) + `Interlocked.Increment`. Expira solo tras la ventana de 60s, sin fugas.
+
+### ✅ Otros arreglos (2026-09-10)
+- `api_client.dart` ahora respeta `--dart-define=API_PORT` (antes hardcodeaba 5220 e ignoraba el flag).
+- Comentario de política CORS aclarado (hacía `AllowAnyOrigin`, no restringía).
+- Eliminado scaffolding de plantilla (`WeatherForecast.cs` / `WeatherForecastController.cs`).
+
+
 ### ✅ Auto-logout en sesión expirada
 **Problema:** Cuando token expiraba, app mostraba "credenciales inválidas" pero no redirigía a login
 **Solución:** 
@@ -151,7 +179,8 @@ python3 -m http.server 8000 --directory mobile/build/app/outputs/flutter-apk
 - POSTGRES_USER=servit
 - POSTGRES_PASSWORD=[segura]
 - JWT_KEY=[segura]
-- GOOGLE_IOS_CLIENT_ID=123326191723-vgl4l913p2u3ftu5fdbjnia34mq8k9cb.apps.googleusercontent.com
+- GOOGLE_IOS_CLIENT_ID (GoogleAuth:IosClientId)=123326191723-vgl4l913p2u3ftu5fdbjnia34mq8k9cb.apps.googleusercontent.com
+- GOOGLE_ANDROID_WEB_CLIENT_ID (GoogleAuth:AndroidClientId)=123326191723-a813r1bf79aphngt6p37j93h6b6isj10.apps.googleusercontent.com
 
 **SSH a la VM:**
 ```bash
@@ -212,6 +241,6 @@ curl http://159.54.142.12:5220/api/categories
 
 ---
 
-**Última actualización:** 2026-09-06  
+**Última actualización:** 2026-09-10  
 **Estado:** ✅ FUNCIONAL EN PRODUCCIÓN  
 **Próxima revisión:** Cuando obtengas dominio o agregues nuevas features

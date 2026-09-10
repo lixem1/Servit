@@ -93,10 +93,20 @@ public class AuthController(
     [HttpPost("google")]
     public async Task<ActionResult<GoogleAuthResponse>> Google(GoogleAuthRequest request)
     {
-        var iosClientId = configuration["GoogleAuth:IosClientId"];
-        if (string.IsNullOrEmpty(iosClientId))
+        // Accept tokens from any configured platform client. On iOS the idToken
+        // audience is the iOS client ID; on Android (which passes serverClientId)
+        // it is the Web/Server client ID. Both must be accepted.
+        var allowedAudiences = new[]
+            {
+                configuration["GoogleAuth:IosClientId"],
+                configuration["GoogleAuth:AndroidClientId"],
+            }
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Select(id => id!)
+            .ToList();
+        if (allowedAudiences.Count == 0)
         {
-            throw new InvalidOperationException("GoogleAuth:IosClientId is not configured. Run 'dotnet user-secrets set GoogleAuth:IosClientId <value>'.");
+            throw new InvalidOperationException("No Google client IDs configured. Set GoogleAuth:IosClientId and/or GoogleAuth:AndroidClientId via user-secrets.");
         }
 
         GoogleJsonWebSignature.Payload payload;
@@ -104,7 +114,7 @@ public class AuthController(
         {
             payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, new GoogleJsonWebSignature.ValidationSettings
             {
-                Audience = [iosClientId]
+                Audience = allowedAudiences
             });
         }
         catch (InvalidJwtException)

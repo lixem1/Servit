@@ -76,17 +76,26 @@ class AuthController extends AsyncNotifier<AuthSession?> {
     });
   }
 
-  String? _pendingGoogleIdToken;
+  final _googleSignIn = GoogleSignIn.instance;
   bool _googleSignInInitialized = false;
+  String? _pendingGoogleIdToken;
+
+  // Web/Server OAuth client ID. When passed as serverClientId, the idToken
+  // audience is set to this value on Android, so the backend must accept it.
+  static const _serverClientId =
+      '123326191723-a813r1bf79aphngt6p37j93h6b6isj10.apps.googleusercontent.com';
+
+  Future<void> _ensureGoogleSignInInitialized() async {
+    if (_googleSignInInitialized) return;
+    await _googleSignIn.initialize(serverClientId: _serverClientId);
+    _googleSignInInitialized = true;
+  }
 
   Future<GoogleAuthResult?> signInWithGoogle() async {
     state = const AsyncLoading();
     GoogleAuthResult? result;
     final newState = await AsyncValue.guard(() async {
-      if (!_googleSignInInitialized) {
-        await _googleSignIn.initialize();
-        _googleSignInInitialized = true;
-      }
+      await _ensureGoogleSignInInitialized();
       final account = await _googleSignIn.authenticate();
       final idToken = account.authentication.idToken;
       if (idToken == null) {
@@ -119,11 +128,10 @@ class AuthController extends AsyncNotifier<AuthSession?> {
   }
 
   Future<void> logout() async {
+    await _googleSignIn.signOut();
     await ref.read(secureStorageProvider).delete(key: _sessionStorageKey);
     state = const AsyncData(null);
   }
-
-  final _googleSignIn = GoogleSignIn.instance;
 
   Future<void> _persist(AuthSession session) async {
     await ref
