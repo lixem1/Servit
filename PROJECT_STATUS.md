@@ -239,6 +239,20 @@ curl http://159.54.142.12:5220/api/categories
 - **Estado del código:** Producción (compilado release)
 - **Documentación:** SECURITY.md, ANDROID_SETUP.md disponibles
 
+## 13. Equipo de Agentes (Claude Code) — cuándo usarlo
+
+Existe un equipo de 4 subagentes en `.claude/agents/` + un workflow automático `.claude/workflows/dev-qa-loop.js` (nombre `servit-dev-qa-loop`):
+
+- **supervisor** (Sonnet 5) — planifica y descompone en tareas.
+- **developer** (Opus 4.8) — implementa Flutter + .NET en rama `agent/<slug>`.
+- **qa** (Sonnet 5) — integration tests en simulador iOS + gates (`flutter analyze`, `dotnet build`).
+- **release** (Haiku 4.5) — deploy a VM + iPhones.
+
+**⚠️ Regla de uso (importante):** el workflow automático **solo se invoca cuando haya un backlog que lo justifique** (varias features/tareas). Consume **~2–4× más tokens** que la edición directa, así que para fixes puntuales (1–2 archivos) se trabaja directo, sin agentes.
+
+**🔒 Producción:** el deploy a la VM y a los iPhones se hace **solo con aprobación humana explícita** vía el agente `release`; nunca dentro del loop automático. Ni el developer ni el ciclo dev↔QA tocan producción.
+
+
 ---
 
 **Última actualización:** 2026-09-10  
