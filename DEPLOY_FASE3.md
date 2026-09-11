@@ -116,6 +116,46 @@ Luego, en el navegador: **https://panel.tu-dominio.com**
 
 ---
 
+## Prueba local (Mac, sin docker)
+
+La forma mas rapida de ver el panel sin tocar la VM ni docker. El backend corre
+con `dotnet run` y el panel con vite; vite proxya `/api` al backend local.
+
+```bash
+# 1) Sembrar el admin local (solo la 1a vez) via user-secrets (no va a git).
+cd backend/src/Servit.Api
+dotnet user-secrets set "Admin:Email" "admin@servit.local"
+dotnet user-secrets set "Admin:Password" "Admin!2026Servit"
+
+# 2) Backend (crea el admin al arrancar). Requiere Postgres local en :5432.
+ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS="http://localhost:5202"   dotnet run --no-launch-profile
+```
+
+En otra terminal:
+
+```bash
+# 3) Panel (vite dev en :5173, proxya /api -> :5202).
+cd admin
+npm run dev
+```
+
+Abrir **http://localhost:5173** e iniciar sesion con
+`admin@servit.local` / `Admin!2026Servit`.
+
+Verificacion rapida por API (opcional):
+
+```bash
+# login por el proxy de vite y gate de admin (ambos deben dar 200)
+curl -s -X POST http://localhost:5173/api/auth/login -H 'Content-Type: application/json'   -d '{"email":"admin@servit.local","password":"Admin!2026Servit"}'
+# tomar el token y:
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5173/api/admin/me   -H "Authorization: Bearer <token>"
+```
+
+> Es la base de datos de **desarrollo local**: algunas listas pueden salir vacias
+> si no hay datos sembrados. No es un fallo del panel.
+
+---
+
 ## Probar sin dominio (HTTP, antes de Cloudflare)
 
 Para validar el build real de los contenedores en la VM **sin** dominio ni HTTPS.
