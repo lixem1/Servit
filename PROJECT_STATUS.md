@@ -281,8 +281,27 @@ API de administración completa (backend, AP-04..AP-12). Implementada en `agent/
 
 **Siguiente:** Fase 2 — panel React-Admin en `admin/` (AP-13..AP-23). Fase 3 (deploy VM + Cloudflare Tunnel) es humano-gated.
 
+## 16. Panel Administrativo Web — Fase 2 ✅ (AP-13..AP-22) (2026-09-11)
+
+Frontend del panel en `admin/` (Vite + React 18 + TypeScript + **react-admin 5**), más un endpoint backend de auditoría. Implementado en `agent/admin-fase-2`, mergeado a `main`. **Verificado headless end-to-end** contra el backend: login por el proxy `/api`, gate de admin (`/api/admin/me` 200), los 6 recursos del menú y los 8 endpoints de páginas (dashboard/analítica/geo) devuelven 200. Build gate: `npm run build` (tsc --noEmit + vite build) => 0 errores.
+
+- **AP-13 scaffold + auth:** `dataProvider` (`{ data, total }`, `page/perPage/sort/order` + filtros), `authProvider` (login `/api/auth/login`, confirma rol Admin vía `/api/admin/me`, **rechaza no-admin**, `checkError` 401/403), i18n español, Dashboard, proxy dev `/api`→`:5202`.
+- **AP-14 usuarios:** List (buscar/rol/estado) + Show 360 + acciones suspend/restore/rol/force-reset.
+- **AP-15 proveedores:** List + Show 360 (aceptación, tiempo de respuesta, GMV).
+- **AP-16 categorías:** CRUD con borrado seguro (surface del 409).
+- **AP-17 solicitudes:** List con búsqueda/segmentos + Show con timeline, adjuntos (blob autenticado), cotizaciones y acciones estado/cancelar/eliminar.
+- **AP-18 reseñas:** List filtrable + borrado (recalcula rating).
+- **AP-19 dashboard:** KPIs + gráficos (recharts: solicitudes/día, top proveedores) + export CSV.
+- **AP-20 analítica:** embudo, tiempos SLA, tabla de solicitudes stale.
+- **AP-21 mapa:** demanda geográfica con react-leaflet (solicitudes por estado + proveedores).
+- **AP-22 auditoría:** `AdminAuditLogsController` (read-only) + List/Show del `AdminAuditLog`.
+
+⚠️ **AP-23 (E2E Playwright) — PENDIENTE.** Requiere instalar `@playwright/test` + Chromium. Checklist manual mientras tanto: (1) login admin OK y **no-admin rechazado**; (2) listar/buscar/filtrar cada recurso; (3) detalle de solicitud con timeline + abrir adjunto; (4) cambiar estado / cancelar solicitud; (5) moderar (borrar) una reseña y ver rating recalculado; (6) dashboard con KPIs/gráficos y export CSV; (7) mapa con marcadores filtrables.
+
+**Siguiente:** AP-23, luego Fase 3 (deploy VM + Cloudflare Tunnel) — **humano-gated** vía agente release.
+
 ---
 
 **Última actualización:** 2026-09-11  
-**Estado:** ✅ FUNCIONAL EN PRODUCCIÓN · Panel admin Fase 0+1 en `main` (sin desplegar)  
-**Próxima revisión:** Al iniciar Fase 2 (frontend React-Admin) del panel admin
+**Estado:** ✅ FUNCIONAL EN PRODUCCIÓN · Panel admin Fase 0+1+2 (AP-01..AP-22) en `main` (sin desplegar)  
+**Próxima revisión:** AP-23 (E2E Playwright) y luego Fase 3 (deploy, humano-gated)
