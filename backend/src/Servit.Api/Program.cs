@@ -33,6 +33,7 @@ builder.Services
     .AddDefaultTokenProviders();
 
 builder.Services.AddScoped<JwtTokenService>();
+builder.Services.AddScoped<IAdminAuditService, AdminAuditService>();
 builder.Services.AddSingleton<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddSignalR();
@@ -99,6 +100,9 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ServitDbContext>();
     db.Database.Migrate();
+
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    await AdminSeeder.SeedAdminAsync(scope.ServiceProvider, app.Configuration, logger);
 }
 
 if (app.Environment.IsDevelopment())
