@@ -81,16 +81,32 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
-// CORS: open policy — mobile clients don't enforce CORS. Tighten origins if a web client is added.
+// CORS: los clientes mobile nativos no aplican CORS. Si Cors:AllowedOrigins esta
+// configurado (p. ej. el host del panel admin en produccion), restringimos a esos
+// origenes; si no, caemos a una politica abierta para que el mobile siga funcionando.
+var allowedOrigins = (builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
+    .Where(o => !string.IsNullOrWhiteSpace(o))
+    .ToArray();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowMobileApp", policy =>
     {
-        policy
-            .AllowAnyOrigin()
-            .AllowAnyMethod()
-            .AllowAnyHeader()
-            .WithExposedHeaders("content-disposition");
+        if (allowedOrigins.Length > 0)
+        {
+            policy
+                .WithOrigins(allowedOrigins)
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .WithExposedHeaders("content-disposition");
+        }
+        else
+        {
+            policy
+                .AllowAnyOrigin()
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .WithExposedHeaders("content-disposition");
+        }
     });
 });
 

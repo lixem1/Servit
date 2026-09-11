@@ -300,8 +300,20 @@ Frontend del panel en `admin/` (Vite + React 18 + TypeScript + **react-admin 5**
 
 **Siguiente:** Fase 3 (deploy VM + Cloudflare Tunnel, AP-24..AP-27) — **humano-gated** vía agente release.
 
+## 17. Panel Administrativo Web — Fase 3 (deploy) — artefactos listos (2026-09-11)
+
+Artefactos de despliegue del panel **construidos y verificados en repo** (AP-24..AP-27), en `agent/admin-fase-3` → `main`. El **encendido en la VM es humano-gated**: requiere secretos que solo tiene el humano (dominio + token de Cloudflare) y acceso SSH a la VM. Runbook completo: `DEPLOY_FASE3.md`.
+
+- **AP-24 · Imagen del panel + nginx:** `admin/Dockerfile` (build node:22-alpine → runtime nginx:alpine sirviendo `dist/`) + `admin/nginx.conf` (SPA `try_files … /index.html` + `proxy_pass /api → api:8080`, mismo origen ⇒ **el panel no necesita CORS**) + `admin/.dockerignore`.
+- **AP-25 · Cloudflare Tunnel:** servicios `admin` y `cloudflared` (token-run) en `backend/docker-compose.yml`. El túnel publica HTTPS sin exponer la IP de la VM; el mapeo `hostname público → admin:80` se configura en el dashboard de Cloudflare. La app **mobile no cambia** (sigue en `159.54.142.12:5220`).
+- **AP-26 · CORS endurecido:** `Program.cs` lee `Cors:AllowedOrigins`; si está configurado usa `WithOrigins(...)`, si no cae a `AllowAnyOrigin` (mobile sigue funcionando). Env `Admin__Email/Password`, `Cors__AllowedOrigins__0=${PANEL_ORIGIN}` inyectadas al servicio `api`. Build gate: `dotnet build backend/Servit.slnx` ⇒ 0 errores.
+- **AP-27 · Runbook + secretos:** `DEPLOY_FASE3.md` (arquitectura, paso a paso VM/Cloudflare, verificación, smoke manual, rollback, notas de seguridad) + `backend/.env.example` extendido (`ADMIN_EMAIL/PASSWORD`, `PANEL_ORIGIN`, `CLOUDFLARE_TUNNEL_TOKEN`, `SMTP_*`).
+
+⚠️ **Pendiente humano (Fase B):** en la VM — setear `.env` (admin + `PANEL_ORIGIN` + token), crear el túnel en Cloudflare (hostname → `admin:80`), `git pull` + `docker-compose build admin api` + `up -d`, y verificar en `https://<hostname>`. Seguir `DEPLOY_FASE3.md`. **docker no está disponible localmente**, así que las imágenes solo se construyen/prueban en la VM.
+
+
 ---
 
 **Última actualización:** 2026-09-11  
-**Estado:** ✅ FUNCIONAL EN PRODUCCIÓN · Panel admin Fase 0+1+2 (AP-01..AP-23) en `main` (sin desplegar)  
-**Próxima revisión:** Fase 3 (deploy VM + Cloudflare Tunnel, AP-24..AP-27) — humano-gated
+**Estado:** ✅ FUNCIONAL EN PRODUCCIÓN · Panel admin Fase 0+1+2+3-artefactos (AP-01..AP-27) en `main` (panel sin desplegar)  
+**Próxima revisión:** encender el panel en la VM (Fase B de `DEPLOY_FASE3.md`) — humano-gated
