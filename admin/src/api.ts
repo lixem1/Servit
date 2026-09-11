@@ -14,3 +14,18 @@ export const adminFetch = async (path: string, options: RequestInit = {}) => {
   }
   return res.status === 204 ? null : res.json();
 };
+
+// Fetch a binary admin resource (e.g. an attachment) and open it in a new tab.
+// Needed because attachment endpoints require the Bearer token, so a plain
+// <a href> can't be used.
+export const openAdminBlob = async (path: string) => {
+  const token = localStorage.getItem('servit_token');
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
