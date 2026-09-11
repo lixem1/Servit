@@ -4,3 +4,7 @@ dist-ssr
 *.local
 .env.local
 .vite
+playwright-report
+test-results
+/e2e/.auth
+.last-run.json

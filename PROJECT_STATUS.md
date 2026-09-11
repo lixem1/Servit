@@ -281,7 +281,7 @@ API de administración completa (backend, AP-04..AP-12). Implementada en `agent/
 
 **Siguiente:** Fase 2 — panel React-Admin en `admin/` (AP-13..AP-23). Fase 3 (deploy VM + Cloudflare Tunnel) es humano-gated.
 
-## 16. Panel Administrativo Web — Fase 2 ✅ (AP-13..AP-22) (2026-09-11)
+## 16. Panel Administrativo Web — Fase 2 ✅ (AP-13..AP-23) (2026-09-11)
 
 Frontend del panel en `admin/` (Vite + React 18 + TypeScript + **react-admin 5**), más un endpoint backend de auditoría. Implementado en `agent/admin-fase-2`, mergeado a `main`. **Verificado headless end-to-end** contra el backend: login por el proxy `/api`, gate de admin (`/api/admin/me` 200), los 6 recursos del menú y los 8 endpoints de páginas (dashboard/analítica/geo) devuelven 200. Build gate: `npm run build` (tsc --noEmit + vite build) => 0 errores.
 
@@ -296,12 +296,12 @@ Frontend del panel en `admin/` (Vite + React 18 + TypeScript + **react-admin 5**
 - **AP-21 mapa:** demanda geográfica con react-leaflet (solicitudes por estado + proveedores).
 - **AP-22 auditoría:** `AdminAuditLogsController` (read-only) + List/Show del `AdminAuditLog`.
 
-⚠️ **AP-23 (E2E Playwright) — PENDIENTE.** Requiere instalar `@playwright/test` + Chromium. Checklist manual mientras tanto: (1) login admin OK y **no-admin rechazado**; (2) listar/buscar/filtrar cada recurso; (3) detalle de solicitud con timeline + abrir adjunto; (4) cambiar estado / cancelar solicitud; (5) moderar (borrar) una reseña y ver rating recalculado; (6) dashboard con KPIs/gráficos y export CSV; (7) mapa con marcadores filtrables.
+- **AP-23 pruebas E2E (Playwright):** `@playwright/test` en `admin/` (Chromium headless), 15 casos verdes y estables (2 corridas + repeat-each). Cubre: login admin y **rechazo de no-admin** + credenciales inválidas; carga sin errores de cada recurso del menú + embudo de analítica + mapa (leaflet) + búsqueda; **CRUD de categorías** (crear→editar→eliminar); detalle de solicitud con timeline + **cambio de estado** real; dashboard con "Resumen" + **export CSV** (descarga). `global-setup.ts` obtiene el token del admin (storageState) y registra el no-admin; el frontend lo levanta Playwright (`npm run dev`). Correr: `npm run test:e2e` (ver `admin/e2e/README.md`; el backend debe correr en `:5202` con admin sembrado y, para la suite, `IpRateLimit__EnableEndpointRateLimiting=false`). Screenshots/traces on-failure. Artefactos en `.gitignore`.
 
-**Siguiente:** AP-23, luego Fase 3 (deploy VM + Cloudflare Tunnel) — **humano-gated** vía agente release.
+**Siguiente:** Fase 3 (deploy VM + Cloudflare Tunnel, AP-24..AP-27) — **humano-gated** vía agente release.
 
 ---
 
 **Última actualización:** 2026-09-11  
-**Estado:** ✅ FUNCIONAL EN PRODUCCIÓN · Panel admin Fase 0+1+2 (AP-01..AP-22) en `main` (sin desplegar)  
-**Próxima revisión:** AP-23 (E2E Playwright) y luego Fase 3 (deploy, humano-gated)
+**Estado:** ✅ FUNCIONAL EN PRODUCCIÓN · Panel admin Fase 0+1+2 (AP-01..AP-23) en `main` (sin desplegar)  
+**Próxima revisión:** Fase 3 (deploy VM + Cloudflare Tunnel, AP-24..AP-27) — humano-gated
