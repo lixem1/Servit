@@ -29,3 +29,19 @@ export const openAdminBlob = async (path: string) => {
   window.open(url, '_blank', 'noopener');
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
+
+// Download a binary admin resource (e.g. reports/export.csv) as a file.
+export const downloadAdminBlob = async (path: string, filename: string) => {
+  const token = localStorage.getItem('servit_token');
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
