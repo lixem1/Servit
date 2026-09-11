@@ -116,6 +116,52 @@ Luego, en el navegador: **https://panel.tu-dominio.com**
 
 ---
 
+## Probar sin dominio (HTTP, antes de Cloudflare)
+
+Para validar el build real de los contenedores en la VM **sin** dominio ni HTTPS.
+No enciende `cloudflared`; expone el panel en un puerto HTTP temporal.
+
+```bash
+ssh -i ~/.ssh/servit-oracle.key ubuntu@159.54.142.12
+cd ~/Servit && git pull origin main && cd backend
+
+# 1) Override temporal que publica el panel por HTTP (no se commitea).
+cat > docker-compose.override.yml <<'YML'
+services:
+  admin:
+    ports:
+      - "8081:80"
+YML
+
+# 2) .env: basta ADMIN_EMAIL/ADMIN_PASSWORD. PANEL_ORIGIN y
+#    CLOUDFLARE_TUNNEL_TOKEN pueden quedar vacios en este modo.
+
+# 3) Build + levantar SOLO db, api y admin (NO cloudflared).
+docker-compose build admin api
+docker-compose up -d db api admin
+```
+
+Abrir el puerto 8081 (Oracle Security List de la subred + firewall de la VM):
+
+```bash
+sudo iptables -I INPUT -p tcp --dport 8081 -j ACCEPT   # o: sudo ufw allow 8081
+```
+
+Probar en el navegador: **http://159.54.142.12:8081**
+- No hay CORS: nginx sirve el panel y proxya `/api` al mismo origen (`api:8080`).
+- El mobile no se ve afectado (sigue en `159.54.142.12:5220`).
+
+### Volver al modo produccion (HTTPS por Cloudflare)
+
+```bash
+cd ~/Servit/backend
+docker-compose down                    # baja db/api/admin
+rm docker-compose.override.yml         # quita el puerto de prueba
+sudo iptables -D INPUT -p tcp --dport 8081 -j ACCEPT   # cerrar el puerto (o: sudo ufw delete allow 8081)
+# rellenar PANEL_ORIGIN + CLOUDFLARE_TUNNEL_TOKEN en .env y seguir Paso 2 en adelante
+docker-compose up -d
+```
+
 ## Rollback
 
 ```bash
