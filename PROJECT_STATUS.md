@@ -265,8 +265,24 @@ Fundaciones de seguridad del panel admin (backend). Implementado y verificado en
 
 **Siguiente:** Fase 1 — API de administración (AP-04..AP-12): paginación/filtros, usuarios, proveedores, categorías CRUD, solicitudes/historial, reseñas, reportes/KPIs, analítica, geo.
 
+## 15. Panel Administrativo Web — Fase 1 ✅ (2026-09-11)
+
+API de administración completa (backend, AP-04..AP-12). Implementada en `agent/admin-fase-1`, mergeada a `main`. Verificada en runtime: 15 endpoints admin → **200 con JWT admin, 401 sin token**. Toda mutación pasa por `IAdminAuditService`. DTOs en `Contracts/Admin`; nunca se exponen entidades EF.
+
+- **AP-04 · Base de listados:** `PagedQuery`/`PagedResponse` (`{ data, total }`, `page/perPage/sort/order`) + `QueryableExtensions.ToPagedResponseAsync` — formato del dataProvider de React-Admin.
+- **AP-05 · Usuarios (+360):** `AdminUsersController` — list (buscar nombre/email, filtrar rol/estado/fecha), detalle 360 (roles, proveedor, últimas solicitudes, reseñas dadas/recibidas), suspend/restore (`DeletedAt`), role, force-reset (código 6 dígitos por email).
+- **AP-06 · Proveedores (+360):** `AdminProvidersController` — list (rating, categorías, trabajos), detalle 360 (respuestas, aceptación, tiempo medio de respuesta, GMV).
+- **AP-07 · Categorías CRUD:** `AdminCategoriesController` — create/update/delete con borrado seguro (409 si hay asociaciones).
+- **AP-08 · Solicitudes + historial:** `AdminServiceRequestsController` — búsqueda global + filtros, detalle con timeline + adjuntos + cotizaciones (lectura), PATCH status / cancel / delete. (Limitación: el borrado no elimina archivos en disco — `IFileStorageService` no expone delete.)
+- **AP-09 · Reseñas (moderación):** `AdminReviewsController` — list filtrable + delete con recálculo de `AverageRating`/`RatingCount`.
+- **AP-10 · Reportes/KPIs:** `AdminReportsController` — `summary` (usuarios/proveedores/estados, tasa de completado, GMV=Σ ProposedPrice de completadas), `timeseries`, `top?dimension=providers|categories`, `export.csv`.
+- **AP-11 · Analítica operativa:** `AdminAnalyticsController` — `funnel` (solicitudes→cotizadas→asignadas→completadas), `response-times` (1ª respuesta + tiempo en cola), `stale` (Pending sin cotizaciones tras X horas).
+- **AP-12 · Vista geográfica:** `AdminGeoController` — `/geo/requests` y `/geo/providers` con lat/lon. Nota: columnas `geography`, así que las coordenadas se leen del `Point` en memoria (ST_X/ST_Y de Postgres son geometry-only).
+
+**Siguiente:** Fase 2 — panel React-Admin en `admin/` (AP-13..AP-23). Fase 3 (deploy VM + Cloudflare Tunnel) es humano-gated.
+
 ---
 
 **Última actualización:** 2026-09-11  
-**Estado:** ✅ FUNCIONAL EN PRODUCCIÓN · Panel admin Fase 0 en `main` (sin desplegar)  
-**Próxima revisión:** Al terminar Fase 1 del panel admin
+**Estado:** ✅ FUNCIONAL EN PRODUCCIÓN · Panel admin Fase 0+1 en `main` (sin desplegar)  
+**Próxima revisión:** Al iniciar Fase 2 (frontend React-Admin) del panel admin
