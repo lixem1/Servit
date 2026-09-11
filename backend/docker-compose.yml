@@ -31,6 +31,9 @@ services:
       Jwt__Audience: ${JWT_AUDIENCE}
       GoogleAuth__IosClientId: ${GOOGLE_IOS_CLIENT_ID}
       Storage__RootPath: /app/uploads
+      Admin__Email: ${ADMIN_EMAIL}
+      Admin__Password: ${ADMIN_PASSWORD}
+      Cors__AllowedOrigins__0: ${PANEL_ORIGIN}
       Smtp__Host: ${SMTP_HOST}
       Smtp__Port: ${SMTP_PORT}
       Smtp__User: ${SMTP_USER}
@@ -39,6 +42,24 @@ services:
       Smtp__FromName: ${SMTP_FROM_NAME}
     volumes:
       - ./uploads:/app/uploads
+
+  # Panel administrativo (Fase 3): nginx sirve la SPA y proxya /api al contenedor api.
+  admin:
+    build:
+      context: ../admin
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  # Cloudflare Tunnel: publica el panel por HTTPS sin exponer la IP de la VM.
+  # El hostname publico -> http://admin:80 se configura en el panel de Cloudflare
+  # (tunnel gestionado por token). Ver DEPLOY_FASE3.md.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - admin
 
 volumes:
   db_data:
