@@ -14,6 +14,8 @@ namespace Servit.Api.Controllers.Admin;
 public class AdminGeoController(ServitDbContext dbContext) : ControllerBase
 {
     // Service-request points for a demand map/heatmap. Point.Y = lat, Point.X = lng (SRID 4326).
+    // Coordinates are read in-memory: the columns are `geography`, and PostgreSQL's ST_X/ST_Y
+    // are geometry-only, so projecting .X/.Y in SQL fails. Npgsql materializes the Point instead.
     [HttpGet("requests")]
     public async Task<ActionResult<List<GeoRequestDto>>> Requests(
         [FromQuery] ServiceRequestStatus? status,
@@ -28,19 +30,29 @@ public class AdminGeoController(ServitDbContext dbContext) : ControllerBase
         if (to is not null) query = query.Where(sr => sr.CreatedAt <= to);
 
         var rows = await query
-            .Select(sr => new GeoRequestDto
+            .Select(sr => new
             {
-                Id = sr.Id,
-                Lat = sr.Location.Y,
-                Lng = sr.Location.X,
-                Status = sr.Status,
-                CategoryId = sr.CategoryId,
+                sr.Id,
+                sr.Location,
+                sr.Status,
+                sr.CategoryId,
                 CategoryName = sr.Category.Name,
-                CreatedAt = sr.CreatedAt,
+                sr.CreatedAt,
             })
             .ToListAsync();
 
-        return Ok(rows);
+        var result = rows.Select(r => new GeoRequestDto
+        {
+            Id = r.Id,
+            Lat = r.Location.Y,
+            Lng = r.Location.X,
+            Status = r.Status,
+            CategoryId = r.CategoryId,
+            CategoryName = r.CategoryName,
+            CreatedAt = r.CreatedAt,
+        }).ToList();
+
+        return Ok(result);
     }
 
     // Provider points (only those with a known location), optionally by category.
@@ -54,17 +66,26 @@ public class AdminGeoController(ServitDbContext dbContext) : ControllerBase
         }
 
         var rows = await query
-            .Select(p => new GeoProviderDto
+            .Select(p => new
             {
-                Id = p.Id,
-                Lat = p.Location!.Y,
-                Lng = p.Location!.X,
+                p.Id,
+                p.Location,
                 FullName = p.User.FullName,
-                AverageRating = p.AverageRating,
-                RatingCount = p.RatingCount,
+                p.AverageRating,
+                p.RatingCount,
             })
             .ToListAsync();
 
-        return Ok(rows);
+        var result = rows.Select(p => new GeoProviderDto
+        {
+            Id = p.Id,
+            Lat = p.Location!.Y,
+            Lng = p.Location!.X,
+            FullName = p.FullName,
+            AverageRating = p.AverageRating,
+            RatingCount = p.RatingCount,
+        }).ToList();
+
+        return Ok(result);
     }
 }
