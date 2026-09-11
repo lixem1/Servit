@@ -253,8 +253,20 @@ Existe un equipo de 4 subagentes en `.claude/agents/` + un workflow automático 
 **🔒 Producción:** el deploy a la VM y a los iPhones se hace **solo con aprobación humana explícita** vía el agente `release`; nunca dentro del loop automático. Ni el developer ni el ciclo dev↔QA tocan producción.
 
 
+## 14. Panel Administrativo Web — Fase 0 ✅ (2026-09-11)
+
+Fundaciones de seguridad del panel admin (backend). Implementado y verificado end-to-end en la rama `agent/admin-fase-0`, mergeado a `main`. Backlog completo en `ADMIN_PANEL_BACKLOG.md`.
+
+- **AP-01 · Rol Admin + seed:** `Roles.Admin`; `AdminSeeder.SeedAdminAsync` crea rol + admin desde `Admin:Email`/`Admin:Password` (user-secrets/env) tras `Migrate()`, idempotente, no rompe el arranque si falta config. Claves documentadas en `appsettings.json`.
+- **AP-02 · Autorización + sesión:** `AdminController` con `[Authorize(Roles = Roles.Admin)]` (base para Fase 1); `GET /api/admin/me` → `AdminMeResponse`. Verificado: admin→200, sin token→401, no-admin→403.
+- **AP-03 · Auditoría:** entidad `AdminAuditLog` + migración `AddAdminAuditLog` (aplica limpio) + `IAdminAuditService`/`AdminAuditService` (Scoped, `LogAsync` serializa a JSON). Listo para cablear en cada mutación admin de Fase 1.
+
+⚠️ **Deploy pendiente (humano-gated):** en la VM, setear `Admin:Email`/`Admin:Password` (user-secrets o `Admin__*` en `.env`/compose) para sembrar el admin real. La migración se aplica sola al arranque (auto-migrate).
+
+**Siguiente:** Fase 1 — API de administración (AP-04..AP-12): paginación/filtros, usuarios, proveedores, categorías CRUD, solicitudes/historial, reseñas, reportes/KPIs, analítica, geo.
+
 ---
 
-**Última actualización:** 2026-09-10  
-**Estado:** ✅ FUNCIONAL EN PRODUCCIÓN  
-**Próxima revisión:** Cuando obtengas dominio o agregues nuevas features
+**Última actualización:** 2026-09-11  
+**Estado:** ✅ FUNCIONAL EN PRODUCCIÓN · Panel admin Fase 0 en `main` (sin desplegar)  
+**Próxima revisión:** Al terminar Fase 1 del panel admin
