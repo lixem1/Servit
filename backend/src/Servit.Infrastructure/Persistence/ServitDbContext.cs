@@ -16,6 +16,7 @@ public class ServitDbContext(DbContextOptions<ServitDbContext> options)
     public DbSet<ServiceRequestAttachment> ServiceRequestAttachments => Set<ServiceRequestAttachment>();
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<PasswordResetCode> PasswordResetCodes => Set<PasswordResetCode>();
+    public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -130,6 +131,17 @@ public class ServitDbContext(DbContextOptions<ServitDbContext> options)
                 .WithMany()
                 .HasForeignKey(c => c.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AdminAuditLog>(entity =>
+        {
+            entity.HasOne(a => a.AdminUser)
+                .WithMany()
+                .HasForeignKey(a => a.AdminUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(a => a.AdminUserId);
+            entity.HasIndex(a => a.CreatedAt);
         });
     }
 }
