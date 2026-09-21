@@ -39,8 +39,27 @@ export const authProvider: AuthProvider = {
     return Promise.resolve();
   },
 
-  checkAuth: () =>
-    localStorage.getItem('servit_token') ? Promise.resolve() : Promise.reject(),
+  checkAuth: () => {
+    const token = localStorage.getItem('servit_token');
+    if (!token) return Promise.reject();
+
+    // Decode the JWT payload and check the exp claim.
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.exp && payload.exp * 1000 < Date.now()) {
+        // Token expired — clean up and force re-login.
+        localStorage.removeItem('servit_token');
+        localStorage.removeItem('servit_identity');
+        return Promise.reject();
+      }
+    } catch {
+      // Malformed token — reject.
+      localStorage.removeItem('servit_token');
+      localStorage.removeItem('servit_identity');
+      return Promise.reject();
+    }
+    return Promise.resolve();
+  },
 
   checkError: (error) => {
     const status = error?.status;

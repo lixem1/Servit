@@ -24,6 +24,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { adminFetch, downloadAdminBlob } from './api';
+import { kpiColors } from './theme';
 
 type Summary = {
   totalUsers: number;
@@ -38,41 +39,54 @@ type Summary = {
   gmv: number;
 };
 
-// "info-box" estilo AdminLTE: chip de icono a color + numero + etiqueta.
-// El color se refuerza con icono y texto (nunca identidad solo por color).
-const InfoBox = ({
+// KPI card con fondo gradiente estilo Dompet:
+// icono blanco + numero blanco + etiqueta blanca semi-transparente.
+const GradientKpi = ({
   label,
   value,
   icon,
-  color,
+  gradient,
 }: {
   label: string;
   value: string | number;
   icon: ReactNode;
-  color: string;
+  gradient: { from: string; to: string };
 }) => (
-  <Card sx={{ flex: '1 1 190px', minWidth: 190 }}>
-    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.75 }}>
+  <Card
+    sx={{
+      flex: '1 1 200px',
+      minWidth: 200,
+      background: `linear-gradient(135deg, ${gradient.from} 0%, ${gradient.to} 100%)`,
+      border: 'none',
+      color: '#fff',
+    }}
+  >
+    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2.5 }}>
       <Box
         sx={{
-          width: 46,
-          height: 46,
-          borderRadius: 2,
+          width: 50,
+          height: 50,
+          borderRadius: '50%',
           flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          bgcolor: `${color}1f`,
-          color,
+          bgcolor: 'rgba(255,255,255,0.25)',
+          color: '#fff',
+          fontSize: 28,
         }}
       >
         {icon}
       </Box>
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.1 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.1, color: '#fff' }}>
           {value}
         </Typography>
-        <Typography variant="caption" color="text.secondary" noWrap>
+        <Typography
+          variant="body2"
+          sx={{ color: 'rgba(255,255,255,0.85)', mt: 0.25, fontWeight: 500 }}
+          noWrap
+        >
           {label}
         </Typography>
       </Box>
@@ -83,7 +97,7 @@ const InfoBox = ({
 const ChartCard = ({ title, children }: { title: string; children: any }) => (
   <Card sx={{ flex: '1 1 420px', minWidth: 320 }}>
     <CardContent>
-      <Typography variant="subtitle1" gutterBottom>
+      <Typography variant="subtitle1" gutterBottom sx={{ color: '#333' }}>
         {title}
       </Typography>
       <Box sx={{ height: 260 }}>
@@ -114,20 +128,26 @@ export const Dashboard = () => {
       .catch(() => {});
   }, []);
 
-  const c = theme.palette;
-  const gridColor = c.mode === 'light' ? '#e5e7eb' : '#334155';
-  const axisColor = c.text.secondary;
+  const gridColor = theme.palette.mode === 'light' ? '#e9ecef' : '#334155';
+  const axisColor = theme.palette.text.secondary;
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2 } }}>
       <Title title="Servit · Panel de administración" />
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6">Resumen</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>Resumen</Typography>
         <Button
           variant="contained"
           size="small"
           startIcon={<DownloadIcon />}
+          sx={{
+            background: 'linear-gradient(135deg, #4fd1c5 0%, #38b2ac 100%)',
+            '&:hover': { background: 'linear-gradient(135deg, #38b2ac 0%, #2c9a8f 100%)' },
+            textTransform: 'none',
+            borderRadius: 2,
+            px: 2.5,
+          }}
           onClick={() =>
             downloadAdminBlob('/reports/export.csv', 'servit-solicitudes.csv').catch((e) =>
               setError(e.message),
@@ -139,31 +159,38 @@ export const Dashboard = () => {
       </Box>
 
       {error && <Typography color="error">{error}</Typography>}
-      {!s && !error && <Typography>Cargando…</Typography>}
+      {!s && !error && <Typography color="text.secondary">Cargando…</Typography>}
 
       {s && (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-          <InfoBox label="Usuarios" value={s.totalUsers} icon={<PeopleIcon />} color={c.info.main} />
-          <InfoBox label="Nuevos (30 d)" value={s.newUsersLast30Days} icon={<PersonAddIcon />} color={c.primary.main} />
-          <InfoBox label="Proveedores" value={s.totalProviders} icon={<HandymanIcon />} color={c.secondary.main} />
-          <InfoBox label="Solicitudes" value={s.totalRequests} icon={<AssignmentIcon />} color={c.primary.main} />
-          <InfoBox label="En cola" value={s.pendingRequests} icon={<HourglassEmptyIcon />} color={c.warning.main} />
-          <InfoBox label="En curso" value={s.assignedRequests} icon={<AutorenewIcon />} color={c.info.main} />
-          <InfoBox label="Completadas" value={s.completedRequests} icon={<CheckCircleIcon />} color={c.success.main} />
-          <InfoBox label="Canceladas" value={s.cancelledRequests} icon={<CancelIcon />} color={c.error.main} />
-          <InfoBox label="Tasa de completado" value={`${Math.round(s.completionRate * 100)}%`} icon={<PercentIcon />} color={c.success.main} />
-          <InfoBox label="GMV" value={s.gmv.toLocaleString('es-PE')} icon={<PaidIcon />} color={c.primary.main} />
+          <GradientKpi label="Usuarios" value={s.totalUsers} icon={<PeopleIcon />} gradient={kpiColors.teal} />
+          <GradientKpi label="Nuevos (30 d)" value={s.newUsersLast30Days} icon={<PersonAddIcon />} gradient={kpiColors.blue} />
+          <GradientKpi label="Proveedores" value={s.totalProviders} icon={<HandymanIcon />} gradient={kpiColors.purple} />
+          <GradientKpi label="Solicitudes" value={s.totalRequests} icon={<AssignmentIcon />} gradient={kpiColors.coral} />
+          <GradientKpi label="En cola" value={s.pendingRequests} icon={<HourglassEmptyIcon />} gradient={kpiColors.orange} />
+          <GradientKpi label="En curso" value={s.assignedRequests} icon={<AutorenewIcon />} gradient={kpiColors.blue} />
+          <GradientKpi label="Completadas" value={s.completedRequests} icon={<CheckCircleIcon />} gradient={kpiColors.green} />
+          <GradientKpi label="Canceladas" value={s.cancelledRequests} icon={<CancelIcon />} gradient={kpiColors.coral} />
+          <GradientKpi label="Tasa completado" value={`${Math.round(s.completionRate * 100)}%`} icon={<PercentIcon />} gradient={kpiColors.green} />
+          <GradientKpi label="GMV" value={s.gmv.toLocaleString('es-PE')} icon={<PaidIcon />} gradient={kpiColors.teal} />
         </Box>
       )}
 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2.5 }}>
         <ChartCard title="Solicitudes por día">
           <LineChart data={series}>
             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
             <XAxis dataKey="date" stroke={axisColor} fontSize={12} />
             <YAxis allowDecimals={false} stroke={axisColor} fontSize={12} />
-            <Tooltip />
-            <Line type="monotone" dataKey="count" stroke={c.primary.main} strokeWidth={2} dot={false} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#fff',
+                border: '1px solid #e9ecef',
+                borderRadius: 8,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              }}
+            />
+            <Line type="monotone" dataKey="count" stroke="#4fd1c5" strokeWidth={2.5} dot={false} />
           </LineChart>
         </ChartCard>
         <ChartCard title="Top proveedores (GMV)">
@@ -171,8 +198,15 @@ export const Dashboard = () => {
             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
             <XAxis dataKey="name" hide />
             <YAxis stroke={axisColor} fontSize={12} />
-            <Tooltip />
-            <Bar dataKey="value" fill={c.primary.main} radius={[4, 4, 0, 0]} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#fff',
+                border: '1px solid #e9ecef',
+                borderRadius: 8,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              }}
+            />
+            <Bar dataKey="value" fill="#845ef7" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ChartCard>
       </Box>

@@ -170,6 +170,36 @@ public class AdminUsersController(
         });
     }
 
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, UpdateUserRequest request)
+    {
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user is null) return NotFound();
+
+        var oldEmail = user.Email!;
+        var oldName = user.FullName;
+
+        // If email changed, check it's not taken by another user.
+        if (!string.Equals(oldEmail, request.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            var emailTaken = await dbContext.Users.AnyAsync(u => u.Id != id && u.NormalizedEmail == request.Email.ToUpperInvariant());
+            if (emailTaken) return BadRequest("Ese email ya está en uso por otro usuario.");
+            
+            // Update via UserManager to keep NormalizedEmail in sync.
+            await userManager.SetEmailAsync(user, request.Email);
+            await userManager.SetUserNameAsync(user, request.Email);
+        }
+
+        user.FullName = request.FullName;
+        await dbContext.SaveChangesAsync();
+
+        await audit.LogAsync(User.GetUserId(), "user.update", nameof(ApplicationUser), id.ToString(),
+            oldValue: new { Email = oldEmail, FullName = oldName },
+            newValue: new { request.Email, request.FullName });
+
+        return NoContent();
+    }
+
     [HttpPost("{id:guid}/suspend")]
     public async Task<IActionResult> Suspend(Guid id)
     {

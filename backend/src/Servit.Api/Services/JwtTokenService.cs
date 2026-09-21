@@ -13,7 +13,13 @@ public class JwtTokenService(IConfiguration configuration)
         var key = configuration["Jwt:Key"]!;
         var issuer = configuration["Jwt:Issuer"];
         var audience = configuration["Jwt:Audience"];
-        var expiresAt = DateTimeOffset.UtcNow.AddDays(7);
+
+        // Admin tokens expire in 8 hours (one work session);
+        // regular (mobile) tokens last 7 days to avoid frequent re-login.
+        var isAdmin = roles.Contains("Admin", StringComparer.OrdinalIgnoreCase);
+        var expiresAt = isAdmin
+            ? DateTimeOffset.UtcNow.AddHours(8)
+            : DateTimeOffset.UtcNow.AddDays(7);
 
         var claims = new List<Claim>
         {

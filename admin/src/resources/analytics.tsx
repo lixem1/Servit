@@ -78,8 +78,15 @@ export const AnalyticsPage = () => {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="stage" />
               <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Bar dataKey="value" fill="#1976d2" />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#fff',
+                  border: '1px solid #e9ecef',
+                  borderRadius: 8,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                }}
+              />
+              <Bar dataKey="value" fill="#4fd1c5" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Box>

@@ -14,7 +14,7 @@ import { Layout } from './Layout';
 import { LoginPage } from './Login';
 import { lightTheme, darkTheme } from './theme';
 import { Dashboard } from './Dashboard';
-import { UserList, UserShow } from './resources/users';
+import { UserList, UserShow, UserEdit } from './resources/users';
 import { CategoryList, CategoryCreate, CategoryEdit } from './resources/categories';
 import { ProviderList, ProviderShow } from './resources/providers';
 import { ServiceRequestList, ServiceRequestShow } from './resources/serviceRequests';
@@ -35,7 +35,7 @@ export const App = () => (
     darkTheme={darkTheme}
     title="Servit · Admin"
   >
-    <Resource name="users" list={UserList} show={UserShow} icon={PeopleIcon} options={{ label: 'Usuarios' }} />
+    <Resource name="users" list={UserList} show={UserShow} edit={UserEdit} icon={PeopleIcon} options={{ label: 'Usuarios' }} />
     <Resource name="providers" list={ProviderList} show={ProviderShow} icon={HandymanIcon} options={{ label: 'Proveedores' }} />
     <Resource name="service-requests" list={ServiceRequestList} show={ServiceRequestShow} icon={AssignmentIcon} options={{ label: 'Solicitudes' }} />
     <Resource name="reviews" list={ReviewList} icon={StarIcon} options={{ label: 'Reseñas' }} />
