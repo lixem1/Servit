@@ -1,6 +1,17 @@
-import { useEffect, useState } from 'react';
-import { Card, CardContent, Typography, Box, Button } from '@mui/material';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Card, CardContent, Typography, Box, Button, useTheme } from '@mui/material';
 import { Title } from 'react-admin';
+import PeopleIcon from '@mui/icons-material/People';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import HandymanIcon from '@mui/icons-material/Handyman';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import AutorenewIcon from '@mui/icons-material/Autorenew';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+import PercentIcon from '@mui/icons-material/Percent';
+import PaidIcon from '@mui/icons-material/Paid';
+import DownloadIcon from '@mui/icons-material/Download';
 import {
   ResponsiveContainer,
   LineChart,
@@ -27,13 +38,44 @@ type Summary = {
   gmv: number;
 };
 
-const Kpi = ({ label, value }: { label: string; value: string | number }) => (
-  <Card sx={{ flex: '1 1 180px', minWidth: 180 }}>
-    <CardContent>
-      <Typography variant="body2" color="textSecondary">
-        {label}
-      </Typography>
-      <Typography variant="h5">{value}</Typography>
+// "info-box" estilo AdminLTE: chip de icono a color + numero + etiqueta.
+// El color se refuerza con icono y texto (nunca identidad solo por color).
+const InfoBox = ({
+  label,
+  value,
+  icon,
+  color,
+}: {
+  label: string;
+  value: string | number;
+  icon: ReactNode;
+  color: string;
+}) => (
+  <Card sx={{ flex: '1 1 190px', minWidth: 190 }}>
+    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.75 }}>
+      <Box
+        sx={{
+          width: 46,
+          height: 46,
+          borderRadius: 2,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: `${color}1f`,
+          color,
+        }}
+      >
+        {icon}
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.1 }}>
+          {value}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" noWrap>
+          {label}
+        </Typography>
+      </Box>
     </CardContent>
   </Card>
 );
@@ -54,6 +96,7 @@ const ChartCard = ({ title, children }: { title: string; children: any }) => (
 );
 
 export const Dashboard = () => {
+  const theme = useTheme();
   const [s, setS] = useState<Summary | null>(null);
   const [series, setSeries] = useState<{ date: string; count: number }[]>([]);
   const [topProviders, setTopProviders] = useState<{ name: string; value: number }[]>([]);
@@ -71,64 +114,68 @@ export const Dashboard = () => {
       .catch(() => {});
   }, []);
 
+  const c = theme.palette;
+  const gridColor = c.mode === 'light' ? '#e5e7eb' : '#334155';
+  const axisColor = c.text.secondary;
+
   return (
-    <Card>
+    <Box sx={{ p: { xs: 1, sm: 2 } }}>
       <Title title="Servit · Panel de administración" />
-      <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">Resumen</Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() =>
-              downloadAdminBlob('/reports/export.csv', 'servit-solicitudes.csv').catch((e) =>
-                setError(e.message),
-              )
-            }
-          >
-            Exportar CSV
-          </Button>
+
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6">Resumen</Typography>
+        <Button
+          variant="contained"
+          size="small"
+          startIcon={<DownloadIcon />}
+          onClick={() =>
+            downloadAdminBlob('/reports/export.csv', 'servit-solicitudes.csv').catch((e) =>
+              setError(e.message),
+            )
+          }
+        >
+          Exportar CSV
+        </Button>
+      </Box>
+
+      {error && <Typography color="error">{error}</Typography>}
+      {!s && !error && <Typography>Cargando…</Typography>}
+
+      {s && (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+          <InfoBox label="Usuarios" value={s.totalUsers} icon={<PeopleIcon />} color={c.info.main} />
+          <InfoBox label="Nuevos (30 d)" value={s.newUsersLast30Days} icon={<PersonAddIcon />} color={c.primary.main} />
+          <InfoBox label="Proveedores" value={s.totalProviders} icon={<HandymanIcon />} color={c.secondary.main} />
+          <InfoBox label="Solicitudes" value={s.totalRequests} icon={<AssignmentIcon />} color={c.primary.main} />
+          <InfoBox label="En cola" value={s.pendingRequests} icon={<HourglassEmptyIcon />} color={c.warning.main} />
+          <InfoBox label="En curso" value={s.assignedRequests} icon={<AutorenewIcon />} color={c.info.main} />
+          <InfoBox label="Completadas" value={s.completedRequests} icon={<CheckCircleIcon />} color={c.success.main} />
+          <InfoBox label="Canceladas" value={s.cancelledRequests} icon={<CancelIcon />} color={c.error.main} />
+          <InfoBox label="Tasa de completado" value={`${Math.round(s.completionRate * 100)}%`} icon={<PercentIcon />} color={c.success.main} />
+          <InfoBox label="GMV" value={s.gmv.toLocaleString('es-PE')} icon={<PaidIcon />} color={c.primary.main} />
         </Box>
+      )}
 
-        {error && <Typography color="error">{error}</Typography>}
-        {!s && !error && <Typography>Cargando…</Typography>}
-
-        {s && (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-            <Kpi label="Usuarios" value={s.totalUsers} />
-            <Kpi label="Nuevos (30 d)" value={s.newUsersLast30Days} />
-            <Kpi label="Proveedores" value={s.totalProviders} />
-            <Kpi label="Solicitudes" value={s.totalRequests} />
-            <Kpi label="En cola" value={s.pendingRequests} />
-            <Kpi label="En curso" value={s.assignedRequests} />
-            <Kpi label="Completadas" value={s.completedRequests} />
-            <Kpi label="Canceladas" value={s.cancelledRequests} />
-            <Kpi label="Tasa de completado" value={`${Math.round(s.completionRate * 100)}%`} />
-            <Kpi label="GMV" value={s.gmv.toLocaleString('es-PE')} />
-          </Box>
-        )}
-
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2 }}>
-          <ChartCard title="Solicitudes por día">
-            <LineChart data={series}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Line type="monotone" dataKey="count" stroke="#1976d2" />
-            </LineChart>
-          </ChartCard>
-          <ChartCard title="Top proveedores (GMV)">
-            <BarChart data={topProviders}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" hide />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="value" fill="#2e7d32" />
-            </BarChart>
-          </ChartCard>
-        </Box>
-      </CardContent>
-    </Card>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2 }}>
+        <ChartCard title="Solicitudes por día">
+          <LineChart data={series}>
+            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+            <XAxis dataKey="date" stroke={axisColor} fontSize={12} />
+            <YAxis allowDecimals={false} stroke={axisColor} fontSize={12} />
+            <Tooltip />
+            <Line type="monotone" dataKey="count" stroke={c.primary.main} strokeWidth={2} dot={false} />
+          </LineChart>
+        </ChartCard>
+        <ChartCard title="Top proveedores (GMV)">
+          <BarChart data={topProviders}>
+            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+            <XAxis dataKey="name" hide />
+            <YAxis stroke={axisColor} fontSize={12} />
+            <Tooltip />
+            <Bar dataKey="value" fill={c.primary.main} radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ChartCard>
+      </Box>
+    </Box>
   );
 };
