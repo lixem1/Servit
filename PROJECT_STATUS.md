@@ -312,8 +312,20 @@ Artefactos de despliegue del panel **construidos y verificados en repo** (AP-24.
 ⚠️ **Pendiente humano (Fase B):** en la VM — setear `.env` (admin + `PANEL_ORIGIN` + token), crear el túnel en Cloudflare (hostname → `admin:80`), `git pull` + `docker-compose build admin api` + `up -d`, y verificar en `https://<hostname>`. Seguir `DEPLOY_FASE3.md`. **docker no está disponible localmente**, así que las imágenes solo se construyen/prueban en la VM.
 
 
+## 18. Panel Administrativo Web — Rediseño de UI (estilo AdminLTE moderno) (2026-09-11)
+
+Retema visual del panel `admin/` (sin cambiar lógica ni endpoints). Verificado con capturas reales (Playwright/Chromium) en **modo claro y oscuro**. Build gate: `npm run build` ⇒ 0 errores.
+
+- **`theme.ts`** (nuevo): temas claro y oscuro estilo AdminLTE moderno — azul de marca (`#2563eb`), fondo gris claro (`#f4f6f9`) / slate oscuro, tarjetas con borde sutil, estados semánticos (success/error/warning/info).
+- **`Layout.tsx`** (nuevo): sidebar oscuro con marca "Servit" e ítem activo en azul, topbar de color, layout react-admin personalizado (`AppBar` + `Sidebar` + `Menu`).
+- **`Login.tsx`** (nuevo): página de login propia — tarjeta oscura tipo "glass" con **estilo fijo** (texto claro siempre legible en claro **y** oscuro), fondo degradado slate/indigo autocontenido (sin imágenes externas), franja de marca. Corrige el bug de texto invisible en modo oscuro.
+- **`Dashboard.tsx`**: KPIs como "info-boxes" (chip de icono a color + número + etiqueta; color reforzado con icono y texto) y gráficos (recharts) con colores del tema.
+
+Nota: no altera labels usados por los E2E (Email/Contraseña/Entrar; menú). Detalles menores pendientes (opcionales): traducir el aviso por defecto "Please login to continue" y tematizar el tooltip de recharts en oscuro.
+
+
 ---
 
 **Última actualización:** 2026-09-11  
-**Estado:** ✅ FUNCIONAL EN PRODUCCIÓN · Panel admin Fase 0+1+2+3-artefactos (AP-01..AP-27) en `main` (panel sin desplegar)  
+**Estado:** ✅ FUNCIONAL EN PRODUCCIÓN · Panel admin Fase 0+1+2+3-artefactos (AP-01..AP-27) + rediseño UI (AdminLTE moderno) en `main` (panel sin desplegar)  
 **Próxima revisión:** encender el panel en la VM (Fase B de `DEPLOY_FASE3.md`) — humano-gated

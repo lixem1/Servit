@@ -10,6 +10,9 @@ import MapIcon from '@mui/icons-material/Map';
 import { dataProvider } from './dataProvider';
 import { authProvider } from './authProvider';
 import { i18nProvider } from './i18nProvider';
+import { Layout } from './Layout';
+import { LoginPage } from './Login';
+import { lightTheme, darkTheme } from './theme';
 import { Dashboard } from './Dashboard';
 import { UserList, UserShow } from './resources/users';
 import { CategoryList, CategoryCreate, CategoryEdit } from './resources/categories';
@@ -26,6 +29,10 @@ export const App = () => (
     authProvider={authProvider}
     i18nProvider={i18nProvider}
     dashboard={Dashboard}
+    layout={Layout}
+    loginPage={LoginPage}
+    theme={lightTheme}
+    darkTheme={darkTheme}
     title="Servit · Admin"
   >
     <Resource name="users" list={UserList} show={UserShow} icon={PeopleIcon} options={{ label: 'Usuarios' }} />
